@@ -279,7 +279,9 @@ if uploaded_file is not None:
                     )
                 
                 # Generar PDF en memoria
-                pdf_bytes = bytes(pdf.output(dest='S').encode('latin-1'))
+                buffer = io.BytesIO()
+                pdf.output(buffer)
+                pdf_bytes = buffer.getvalue()
                 
                 st.success("✅ PDF generado exitosamente!")
                 
