@@ -22,6 +22,7 @@ ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
 def clean_cell(val):
+    """Limpia celdas de texto (FECHA, CONCEPTO)"""
     if val is None:
         return ''
     if isinstance(val, float) and np.isnan(val):
@@ -31,18 +32,24 @@ def clean_cell(val):
         return ''
     return sval
 
-def monto_str(val):
+def monto_cell(val):
+    """Limpia y formatea celdas de montos (RETIROS, DEPOSITOS, SALDO)"""
     if val is None:
+        return ''
+    if isinstance(val, float) and np.isnan(val):
+        return ''
+    if isinstance(val, str) and val.strip().lower() in ['nan', 'none', 'null', '']:
         return ''
     try:
         fval = float(val)
-        if fval != fval:  # NaN != NaN
+        if np.isnan(fval):
             return ''
         return f'{fval:,.2f}'
     except:
         return ''
 
 def parse_excel(df):
+    """Parsea el Excel y toma solo las primeras 5 columnas"""
     df = df.iloc[:, :5].copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     parsed = []
@@ -109,62 +116,125 @@ class BanamexPDF(FPDF):
         else:
             self.set_fill_color(191, 191, 191)
 
+        # AQUÍ ESTÁ LA CLAVE: usar funciones diferentes para texto y montos
         vals = [
-            clean_cell(fecha),
-            clean_cell(concepto),
-            monto_str(retiros),
-            monto_str(depositos),
-            monto_str(saldo)
+            clean_cell(fecha),      # Para FECHA (texto)
+            clean_cell(concepto),   # Para CONCEPTO (texto)
+            monto_cell(retiros),    # Para RETIROS (monto)
+            monto_cell(depositos),  # Para DEPOSITOS (monto)
+            monto_cell(saldo)       # Para SALDO (monto)
         ]
+        
         aligns = ['C', 'L', 'R', 'R', 'R']
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
+        
         for i, val in enumerate(vals):
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
             if i < 4:
                 self.line(X_COLS_PT[i+1], y, X_COLS_PT[i+1], y+ROW_H_PT)
+        
         self.rows_in_page += 1
         self.row_global += 1
 
+# INTERFAZ DE STREAMLIT
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
-st.title('🏦 Conversor Estado de Cuenta Banamex – SIN NAN')
+st.title('🏦 Conversor Estado de Cuenta Banamex – SIN NAN ✅')
 
 with st.sidebar:
-    st.header('Datos del cliente')
-    cliente = st.text_input('Nombre', 'PATRICIA IÑIGUEZ FLORES')
+    st.header('📋 Datos del cliente')
+    cliente = st.text_input('Nombre del Cliente', 'PATRICIA IÑIGUEZ FLORES')
     numcte = st.text_input('Número de Cliente', '61900627')
     periodo = st.text_input('Período', '21 DE ENERO DE 2025')
+    
+    st.markdown('---')
+    st.markdown('### ✅ Características')
     st.markdown('''
-* **Ancho x Alto página:** 187.33 mm × 279.4 mm
-* **Fuente:** Helvetica 9 pt
-* **FILTRO ANTI-NAN:** ✅ ACTIVO
-* **Alternado global blanco / gris #bfbfbf**
-* **Líneas negras en columnas (sin la última)**
-''')
+    * **Página:** 187.33 mm × 279.4 mm
+    * **Fuente:** Helvetica 9 pt
+    * **Filtro Anti-NAN:** ✅ ACTIVO
+    * **Alternado:** Blanco / Gris #BFBFBF
+    * **Líneas:** Negras entre columnas
+    * **Formato:** Idéntico al original Banamex
+    ''')
 
-excel_file = st.file_uploader('Sube tu archivo Excel', type=['xlsx', 'xls'])
+st.markdown('### 📁 Subir archivo Excel')
+excel_file = st.file_uploader(
+    'Selecciona tu archivo Excel con los movimientos bancarios', 
+    type=['xlsx', 'xls'],
+    help='El archivo debe tener las columnas: FECHA, CONCEPTO, RETIROS, DEPOSITOS, SALDO'
+)
 
 if excel_file:
-    df_raw = pd.read_excel(excel_file)
-    df = parse_excel(df_raw)
-    st.success(f'✅ Archivo leído. Filas: {len(df)} - FILTRO ANTI-NAN APLICADO')
-    st.dataframe(df.head(15), use_container_width=True)
+    try:
+        # Leer y procesar el archivo
+        df_raw = pd.read_excel(excel_file)
+        df = parse_excel(df_raw)
+        
+        st.success(f'✅ Archivo procesado correctamente: **{len(df)} filas**')
+        
+        # Mostrar preview
+        st.markdown('### 👀 Vista previa de los datos')
+        st.dataframe(df.head(15), use_container_width=True)
+        
+        # Estadísticas
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric('Total Filas', len(df))
+        with col2:
+            retiros_count = df['RETIROS'].notna().sum()
+            st.metric('Retiros', retiros_count)
+        with col3:
+            depositos_count = df['DEPOSITOS'].notna().sum()
+            st.metric('Depósitos', depositos_count)
+        with col4:
+            saldos_count = df['SALDO'].notna().sum()
+            st.metric('Saldos', saldos_count)
+        
+        st.markdown('---')
+        
+        # Botón para generar PDF
+        if st.button('🚀 Generar PDF Estado de Cuenta', type='primary', use_container_width=True):
+            with st.spinner('Generando PDF con formato Banamex...'):
+                try:
+                    pdf = BanamexPDF(cliente, numcte, periodo)
+                    pdf.add_page()
+                    
+                    # Agregar cada fila al PDF
+                    for _, r in df.iterrows():
+                        pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
+                    
+                    # Generar el archivo
+                    buf = io.BytesIO()
+                    pdf.output(buf)
+                    
+                    st.success('✅ PDF generado exitosamente!')
+                    
+                    # Botón de descarga
+                    st.download_button(
+                        label='📥 Descargar Estado de Cuenta PDF',
+                        data=buf.getvalue(),
+                        file_name=f'Banamex_{numcte}_{datetime.now():%Y%m%d_%H%M%S}.pdf',
+                        mime='application/pdf',
+                        use_container_width=True
+                    )
+                    
+                except Exception as e:
+                    st.error(f'❌ Error al generar el PDF: {str(e)}')
+                    
+    except Exception as e:
+        st.error(f'❌ Error al procesar el archivo: {str(e)}')
+        st.info('💡 Asegúrate de que el archivo Excel tenga el formato correcto.')
 
-    if st.button('🚀 Generar PDF SIN NAN'):
-        with st.spinner('Generando PDF con FILTRO ANTI-NAN...'):
-            pdf = BanamexPDF(cliente, numcte, periodo)
-            pdf.add_page()
-            for _, r in df.iterrows():
-                pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
-            buf = io.BytesIO()
-            pdf.output(buf)
-            st.success('✅ PDF generado SIN NAN!')
-            st.download_button(
-                '📥 Descargar PDF LIMPIO',
-                data=buf.getvalue(),
-                file_name=f'Banamex_LIMPIO_{numcte}_{datetime.now():%Y%m%d}.pdf',
-                mime='application/pdf'
-            )
 else:
-    st.info('👉 Sube el Excel para convertirlo')
+    st.info('👆 Sube tu archivo Excel para comenzar')
+    st.markdown('### 📋 Formato esperado del archivo Excel')
+    st.markdown('''
+    El archivo debe tener estas columnas en orden:
+    1. **FECHA** - Fecha del movimiento (puede estar vacía en algunas filas)
+    2. **CONCEPTO** - Descripción del movimiento
+    3. **RETIROS** - Monto de retiros (puede estar vacío)
+    4. **DEPOSITOS** - Monto de depósitos (puede estar vacío)
+    5. **SALDO** - Saldo después del movimiento (puede estar vacío)
+    ''')
