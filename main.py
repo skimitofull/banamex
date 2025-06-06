@@ -21,7 +21,8 @@ BOTTOM_MG_PT = 18.16 * MM_TO_PT
 ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
-def clean_cell(val):
+def limpiar_nan(val):
+    """Devuelve '' si el valor es None, NaN, 'nan', 'None', 'null', o string vacío."""
     if val is None:
         return ''
     if isinstance(val, float) and np.isnan(val):
@@ -32,20 +33,17 @@ def clean_cell(val):
     return sval
 
 def monto_str(val):
-    if val is None:
-        return ''
-    if isinstance(val, float) and np.isnan(val):
-        return ''
-    sval = str(val).strip()
-    if sval.lower() in ['nan', 'none', 'null', '']:
+    """Formatea el monto solo si es número válido, si no, regresa vacío."""
+    limpio = limpiar_nan(val)
+    if limpio == '':
         return ''
     try:
-        return f'{float(val):,.2f}'
+        return f'{float(limpio):,.2f}'
     except:
         return ''
 
 def parse_excel(df):
-    df = df.copy()
+    df = df.iloc[:, :5].copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     parsed = []
     for _, r in df.iterrows():
@@ -112,8 +110,8 @@ class BanamexPDF(FPDF):
             self.set_fill_color(191, 191, 191)
 
         vals = [
-            clean_cell(fecha),
-            clean_cell(concepto),
+            limpiar_nan(fecha),
+            limpiar_nan(concepto),
             monto_str(retiros),
             monto_str(depositos),
             monto_str(saldo)
@@ -122,6 +120,9 @@ class BanamexPDF(FPDF):
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
         for i, val in enumerate(vals):
+            # FILTRO FINAL: elimina cualquier 'nan' que se haya colado
+            if isinstance(val, str):
+                val = val.replace('nan', '').replace('NaN', '').replace('None', '').replace('null', '')
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
             if i < 4:
