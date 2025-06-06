@@ -4,63 +4,68 @@ from fpdf import FPDF
 import io
 from datetime import datetime
 
-MM_TO_PT = 2.83465          # factor mm → pt
-PAGE_W_PT = 187.33 * MM_TO_PT   # 531 pt
-PAGE_H_PT = 279.40 * MM_TO_PT   # 792 pt
+MM_TO_PT = 2.83465
+PAGE_W_PT = 187.33 * MM_TO_PT
+PAGE_H_PT = 279.40 * MM_TO_PT
 
-# ─── POSICIONES HORIZONTALES EXACTAS (mm → pt) ──────────────────────────
+# ─── POSICIONES HORIZONTALES EXACTAS ──────────────────────────────────────
 X_COLS_PT = [m * MM_TO_PT for m in (5.07, 20.47, 105.12, 131.46, 153.27)]
-# márgen dcho de la franja gris
-X_BAND_L_PT = 4.97 * MM_TO_PT                       # 14.088 pt
-X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT           # 478.801 pt
+X_BAND_L_PT = 4.97 * MM_TO_PT
+X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT
 COL_W_PT = [X_COLS_PT[i+1] - X_COLS_PT[i] for i in range(4)]
-COL_W_PT.append(X_BAND_R_PT - X_COLS_PT[-1])        # 5.ª col
+COL_W_PT.append(X_BAND_R_PT - X_COLS_PT[-1])
 
-# ─── POSICIONES VERTICALES ───────────────────────────────────────────────
-Y_DATA_1_PT   = 104.73901                          # primera fila de datos
-Y_HEADER_PT   = 92.448                             # fila de encabezados
-BOTTOM_MG_PT  = 18.16 * MM_TO_PT                   # 51.42 pt
-ROWS_PAGE     = 51                                 # 51 datos + encabezado = 52
-ROW_H_PT      = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
+# ─── POSICIONES VERTICALES ────────────────────────────────────────────────
+Y_DATA_1_PT = 104.73901
+Y_HEADER_PT = 92.448
+BOTTOM_MG_PT = 18.16 * MM_TO_PT
+ROWS_PAGE = 51
+ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
 # ─── FUNCIÓN PARA LIMPIAR VALORES ─────────────────────────────────────────
 def clean_value(value):
     """Limpia valores eliminando nan, None, y strings vacíos"""
     if pd.isna(value) or value is None:
         return ''
-    
+
     str_val = str(value).strip()
     if str_val.lower() in ['nan', 'none', '']:
         return ''
-    
+
     return str_val
 
 def clean_numeric_value(value):
     """Limpia valores numéricos"""
     if pd.isna(value) or value is None:
         return None
-    
+
     try:
         num_val = float(value)
         return num_val if num_val != 0 else None
     except (ValueError, TypeError):
         return None
 
-# ─── PARSER EXCEL (respeta cada renglón) ──────────────────────────────────
+# ─── PARSER EXCEL ─────────────────────────────────────────────────────────
 def parse_excel(df):
     df = df.copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     parsed = []
-    
+
     for _, r in df.iterrows():
+        fecha = clean_value(r['FECHA'])
+        concepto = clean_value(r['CONCEPTO'])
+        retiros = clean_numeric_value(r['RETIROS'])
+        depositos = clean_numeric_value(r['DEPOSITOS'])
+        saldo = clean_numeric_value(r['SALDO'])
+
         parsed.append({
-            'FECHA': clean_value(r['FECHA']),
-            'CONCEPTO': clean_value(r['CONCEPTO']),
-            'RETIROS': clean_numeric_value(r['RETIROS']),
-            'DEPOSITOS': clean_numeric_value(r['DEPOSITOS']),
-            'SALDO': clean_numeric_value(r['SALDO']),
+            'FECHA': fecha,
+            'CONCEPTO': concepto,
+            'RETIROS': retiros,
+            'DEPOSITOS': depositos,
+            'SALDO': saldo,
         })
-    
+
     return pd.DataFrame(parsed)
 
 # ─── CLASE PDF ────────────────────────────────────────────────────────────
@@ -102,11 +107,11 @@ class BanamexPDF(FPDF):
             if i < 4:
                 self.line(X_COLS_PT[i+1], Y_HEADER_PT,
                           X_COLS_PT[i+1], Y_HEADER_PT + ROW_H_PT)
-        
+
         # línea horizontal
         self.line(X_BAND_L_PT, Y_HEADER_PT+ROW_H_PT,
                   X_BAND_R_PT, Y_HEADER_PT+ROW_H_PT)
-        
+
         self.rows_in_page = 0
         self.set_y(Y_DATA_1_PT)
 
@@ -134,11 +139,11 @@ class BanamexPDF(FPDF):
             f'{depositos:,.2f}' if depositos is not None else '',
             f'{saldo:,.2f}' if saldo is not None else ''
         ]
-        
+
         aligns = ['C', 'L', 'R', 'R', 'R']
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
-        
+
         for i, val in enumerate(vals):
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
@@ -158,10 +163,10 @@ with st.sidebar:
     numcte = st.text_input('Número de Cliente', '61900627')
     periodo = st.text_input('Período', '21 DE ENERO DE 2025')
     st.markdown('''
-* **Ancho x Alto página:** 187.33 mm × 279.4 mm  
-* **Fuente:** Helvetica 9 pt  
-* **Filas:** 52 = 1 encabezado + 51 datos  
-* **Alternado global blanco / gris #bfbfbf**  
+* **Ancho x Alto página:** 187.33 mm × 279.4 mm
+* **Fuente:** Helvetica 9 pt
+* **Filas:** 52 = 1 encabezado + 51 datos
+* **Alternado global blanco / gris #bfbfbf**
 * **Líneas negras en columnas (sin la última)**
 ''')
 
@@ -177,14 +182,14 @@ if excel_file:
         with st.spinner('Generando PDF...'):
             pdf = BanamexPDF(cliente, numcte, periodo)
             pdf.add_page()
-            
+
             # Procesar filas sin mostrar None
             for _, r in df.iterrows():
                 pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
-            
+
             buf = io.BytesIO()
             pdf.output(buf)
-            
+
             st.success('✅ PDF generado correctamente!')
             st.download_button(
                 '📥 Descargar PDF',
