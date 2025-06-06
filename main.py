@@ -22,7 +22,6 @@ ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
 def clean_cell(val):
-    """Limpia cualquier valor para que nunca sea 'nan', None o similar."""
     if val is None:
         return ''
     if isinstance(val, float) and np.isnan(val):
@@ -31,18 +30,6 @@ def clean_cell(val):
     if sval.lower() in ['nan', 'none', 'null', '']:
         return ''
     return sval
-
-def clean_num(val):
-    """Devuelve None si val es None o NaN, si no, float(val)"""
-    if val is None:
-        return None
-    if isinstance(val, float) and np.isnan(val):
-        return None
-    try:
-        num = float(val)
-        return num if num != 0 else None
-    except:
-        return None
 
 def parse_excel(df):
     df = df.copy()
@@ -110,21 +97,28 @@ class BanamexPDF(FPDF):
             self.set_fill_color(255, 255, 255)
         else:
             self.set_fill_color(191, 191, 191)
-        # LIMPIEZA FINAL: aquí JAMÁS puede pasar un 'nan'
+
+        def monto_str(val):
+            if val is None:
+                return ''
+            if isinstance(val, float) and np.isnan(val):
+                return ''
+            try:
+                return f'{float(val):,.2f}'
+            except:
+                return ''
+
         vals = [
             clean_cell(fecha),
             clean_cell(concepto),
-            f'{clean_num(retiros):,.2f}' if clean_num(retiros) is not None else '',
-            f'{clean_num(depositos):,.2f}' if clean_num(depositos) is not None else '',
-            f'{clean_num(saldo):,.2f}' if clean_num(saldo) is not None else ''
+            monto_str(retiros),
+            monto_str(depositos),
+            monto_str(saldo)
         ]
         aligns = ['C', 'L', 'R', 'R', 'R']
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
         for i, val in enumerate(vals):
-            # FILTRO FINAL: si por alguna razón queda "nan", lo banea
-            if val.lower() == 'nan':
-                val = ''
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
             if i < 4:
