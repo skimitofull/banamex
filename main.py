@@ -21,18 +21,18 @@ BOTTOM_MG_PT = 18.16 * MM_TO_PT
 ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
-def safe_str(val):
-    """Devuelve '' si val es None, NaN, o 'nan' como string, si no, str(val)"""
+def clean_cell(val):
+    """Limpia cualquier valor para que nunca sea 'nan', None o similar."""
     if val is None:
         return ''
     if isinstance(val, float) and np.isnan(val):
         return ''
     sval = str(val).strip()
-    if sval.lower() == 'nan' or sval.lower() == 'none':
+    if sval.lower() in ['nan', 'none', 'null', '']:
         return ''
     return sval
 
-def safe_num(val):
+def clean_num(val):
     """Devuelve None si val es None o NaN, si no, float(val)"""
     if val is None:
         return None
@@ -50,11 +50,11 @@ def parse_excel(df):
     parsed = []
     for _, r in df.iterrows():
         parsed.append({
-            'FECHA': safe_str(r['FECHA']),
-            'CONCEPTO': safe_str(r['CONCEPTO']),
-            'RETIROS': safe_num(r['RETIROS']),
-            'DEPOSITOS': safe_num(r['DEPOSITOS']),
-            'SALDO': safe_num(r['SALDO']),
+            'FECHA': r['FECHA'],
+            'CONCEPTO': r['CONCEPTO'],
+            'RETIROS': r['RETIROS'],
+            'DEPOSITOS': r['DEPOSITOS'],
+            'SALDO': r['SALDO'],
         })
     return pd.DataFrame(parsed)
 
@@ -110,19 +110,21 @@ class BanamexPDF(FPDF):
             self.set_fill_color(255, 255, 255)
         else:
             self.set_fill_color(191, 191, 191)
+        # LIMPIEZA FINAL: aquí JAMÁS puede pasar un 'nan'
         vals = [
-            safe_str(fecha),
-            safe_str(concepto),
-            f'{retiros:,.2f}' if retiros is not None else '',
-            f'{depositos:,.2f}' if depositos is not None else '',
-            f'{saldo:,.2f}' if saldo is not None else ''
+            clean_cell(fecha),
+            clean_cell(concepto),
+            f'{clean_num(retiros):,.2f}' if clean_num(retiros) is not None else '',
+            f'{clean_num(depositos):,.2f}' if clean_num(depositos) is not None else '',
+            f'{clean_num(saldo):,.2f}' if clean_num(saldo) is not None else ''
         ]
         aligns = ['C', 'L', 'R', 'R', 'R']
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
         for i, val in enumerate(vals):
             # FILTRO FINAL: si por alguna razón queda "nan", lo banea
-            val = '' if val.lower() == 'nan' else val
+            if val.lower() == 'nan':
+                val = ''
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
             if i < 4:
