@@ -9,7 +9,26 @@ MM_TO_PT = 2.83465
 PAGE_W_PT = 187.33 * MM_TO_PT
 PAGE_H_PT = 279.40 * MM_TO_PT
 
-X_COLS_PT = [m * MM_TO_PT for m in (5.07, 20.47, 105.12, 131.46, 153.27)]
+# Medidas de las líneas verticales (en puntos)
+LINE_WIDTH_PT = 0.75
+LINE_COLOR = 0  # Negro (0 para escala de grises)
+
+# Posiciones X de las líneas (en puntos)
+X_LINE_POS_PT = [
+    20.11 * MM_TO_PT,   # Primera línea
+    91.12 * MM_TO_PT,   # Segunda línea
+    115.68 * MM_TO_PT,  # Tercera línea
+    142.35 * MM_TO_PT   # Cuarta línea
+]
+
+# Posición Y de inicio de las líneas (en puntos)
+Y_LINE_START_PT = 31.77 * MM_TO_PT
+
+# Longitud de las líneas (en puntos)
+LINE_LENGTH_PT = 228.88 * MM_TO_PT
+
+# Posiciones X de las columnas (en puntos)
+X_COLS_PT = [5.07 * MM_TO_PT, 20.47 * MM_TO_PT, 105.12 * MM_TO_PT, 131.46 * MM_TO_PT, 153.27 * MM_TO_PT]
 X_BAND_L_PT = 4.97 * MM_TO_PT
 X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT
 COL_W_PT = [X_COLS_PT[i+1] - X_COLS_PT[i] for i in range(4)]
@@ -94,9 +113,11 @@ class BanamexPDF(FPDF):
         for i, h in enumerate(headers):
             self.set_x(X_COLS_PT[i])
             self.cell(COL_W_PT[i], ROW_H_PT, h, 0, 0, 'C', True)
-            if i < 4:
-                self.line(X_COLS_PT[i+1], Y_HEADER_PT,
-                          X_COLS_PT[i+1], Y_HEADER_PT + ROW_H_PT)
+            # Dibujar las líneas verticales
+        self.set_line_width(LINE_WIDTH_PT)
+        self.set_draw_color(LINE_COLOR)
+        for x in X_LINE_POS_PT:
+            self.line(x, Y_LINE_START_PT, x, Y_LINE_START_PT + LINE_LENGTH_PT)
         self.line(X_BAND_L_PT, Y_HEADER_PT+ROW_H_PT,
                   X_BAND_R_PT, Y_HEADER_PT+ROW_H_PT)
         self.rows_in_page = 0
