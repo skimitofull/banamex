@@ -39,7 +39,7 @@ Y_DATA_1_PT = 106.73901            # Ajuste fino: alinea fecha con franjas grise
 BOTTOM_MG_PT = 18.16 * MM_TO_PT   # Margen inferior
 
 # Altura de fila base
-ROW_H_PT = 12  # Ajuste fino para conceptos multilínea
+ROW_H_PT = 12  # Ajuste fino para mejorar espaciado visual
 
 # Pie de página
 FOOTER_TEXT = "Centro de Atención Telefónica Ciudad de México: 55 1226 2639 Resto del país: 800 021 2345"
@@ -172,25 +172,25 @@ class BanamexPDF(FPDF):
         # Escribe los valores
         self.set_font('Helvetica', '', 9)
 
-        # FECHA - centrado vertical y horizontal
+        # FECHA - centrado horizontal y vertical
         self.set_xy(X_COLS_PT[0], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[0], ROW_H_PT, fecha_str, 0, 0, 'C', False)
 
-        # CONCEPTO (con múltiples líneas) - centrado verticalmente
+        # CONCEPTO (con múltiples líneas) - alineado a la izquierda y centrado verticalmente
         line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2)
         for i, line in enumerate(concept_lines):
             self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 3)
-            self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'C', False)
+            self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'L', False)
 
-        # RETIROS - centrado
+        # RETIROS - alineado a la derecha y centrado verticalmente
         self.set_xy(X_COLS_PT[2], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[2], ROW_H_PT, retiros_str, 0, 0, 'R', False)
 
-        # DEPÓSITOS - centrado
+        # DEPÓSITOS - alineado a la derecha y centrado verticalmente
         self.set_xy(X_COLS_PT[3], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[3], ROW_H_PT, depositos_str, 0, 0, 'R', False)
 
-        # SALDO - centrado
+        # SALDO - alineado a la derecha y centrado verticalmente
         self.set_xy(X_COLS_PT[4], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[4], ROW_H_PT, saldo_str, 0, 0, 'R', False)
 
