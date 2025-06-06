@@ -32,13 +32,13 @@ def parse_excel(df):
     for _, r in df.iterrows():
         fecha = str(r['FECHA']).strip() if pd.notna(r['FECHA']) else ''
         concepto = str(r['CONCEPTO']).strip() if pd.notna(r['CONCEPTO']) else ''
-        retiros = float(r['RETIROS']) if pd.notna(r['RETIROS']) else None
-        depositos = float(r['DEPOSITOS']) if pd.notna(r['DEPOSITOS']) else None
-        saldo = float(r['SALDO']) if pd.notna(r['SALDO']) else None
+        retiros = r['RETIROS'] if pd.notna(r['RETIROS']) else None
+        depositos = r['DEPOSITOS'] if pd.notna(r['DEPOSITOS']) else None
+        saldo = r['SALDO'] if pd.notna(r['SALDO']) else None
         
         parsed.append({
-            'FECHA': fecha if fecha != 'nan' else '',
-            'CONCEPTO': concepto if concepto != 'nan' else '',
+            'FECHA': '' if fecha == 'nan' else fecha,
+            'CONCEPTO': '' if concepto == 'nan' else concepto,
             'RETIROS': retiros,
             'DEPOSITOS': depositos,
             'SALDO': saldo,
@@ -154,6 +154,8 @@ if excel_file:
         pdf = BanamexPDF(cliente, numcte, periodo)
         pdf.add_page()
         pdf.set_font('Helvetica','',9)  # Establecer la fuente aquí
+        
+        # Evitar que Streamlit muestre "None"
         for _,r in df.iterrows():
             pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
 
