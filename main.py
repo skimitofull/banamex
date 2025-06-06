@@ -279,17 +279,14 @@ if uploaded_file is not None:
                     )
                 
                 # Generar PDF en memoria
-                pdf_output = io.BytesIO()
-                pdf_string = pdf.output(dest='S').encode('latin-1')
-                pdf_output.write(pdf_string)
-                pdf_output.seek(0)
+                pdf_bytes = pdf.output(dest="S").encode("latin-1")
                 
                 st.success("✅ PDF generado exitosamente!")
                 
                 # Botón de descarga
                 st.download_button(
                     label="📥 Descargar Estado de Cuenta PDF",
-                    data=pdf_output.getvalue(),
+                    data=pdf_bytes,
                     file_name=f"estado_cuenta_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     use_container_width=True
