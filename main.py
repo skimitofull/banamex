@@ -5,35 +5,38 @@ import io
 from datetime import datetime
 import numpy as np
 
+# Constantes de conversión
 MM_TO_PT = 2.83465
 PAGE_W_PT = 187.33 * MM_TO_PT
 PAGE_H_PT = 279.40 * MM_TO_PT
 
-# Líneas verticales (en mm desde el borde izquierdo)
-X_LINE_MM = [20.11, 91.12, 115.68, 142.35]
+# Líneas verticales (en mm desde el borde izquierdo) - Valores corregidos
+X_LINE_MM = [20.00, 91.13, 115.78, 142.45]
 X_LINE_PT = [x * MM_TO_PT for x in X_LINE_MM]
-Y_LINE_START_PT = 31.77 * MM_TO_PT
+Y_LINE_START_PT = 32.61 * MM_TO_PT  # Altura corregida desde el borde superior
 LINE_LENGTH_PT = 228.88 * MM_TO_PT
-LINE_WIDTH_PT = 0.75
+LINE_WIDTH_PT = 0.75  # Grosor de línea en puntos
 
 # Columnas (en puntos)
 X_COLS_PT = [
-    14.37,          # FECHA - 14.37 pt desde el borde izquierdo
-    X_LINE_PT[0],   # CONCEPTO - alineada con la primera línea
-    X_LINE_PT[1],   # RETIROS - alineada con la segunda línea
-    X_LINE_PT[2],   # DEPOSITOS - alineada con la tercera línea
-    X_LINE_PT[3]    # SALDO - alineada con la cuarta línea
+    5.11 * MM_TO_PT,   # FECHA - ahora está alineada a 5.11 mm desde el borde izquierdo
+    X_LINE_PT[0],      # CONCEPTO - alineado con la primera línea vertical
+    X_LINE_PT[1],      # RETIROS - alineado con la segunda línea vertical
+    X_LINE_PT[2],      # DEPOSITOS - alineado con la tercera línea vertical
+    X_LINE_PT[3]       # SALDO - alineado con la cuarta línea vertical
 ]
 
+# Ancho derecho para cálculo del ancho de la última columna
 X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT
 COL_W_PT = [
-    X_COLS_PT[1] - X_COLS_PT[0],
-    X_COLS_PT[2] - X_COLS_PT[1],
-    X_COLS_PT[3] - X_COLS_PT[2],
-    X_COLS_PT[4] - X_COLS_PT[3],
-    X_BAND_R_PT - X_COLS_PT[4]
+    X_COLS_PT[1] - X_COLS_PT[0],  # Ancho de "FECHA"
+    X_COLS_PT[2] - X_COLS_PT[1],  # Ancho de "CONCEPTO"
+    X_COLS_PT[3] - X_COLS_PT[2],  # Ancho de "RETIROS"
+    X_COLS_PT[4] - X_COLS_PT[3],  # Ancho de "DEPÓSITOS"
+    X_BAND_R_PT - X_COLS_PT[4]    # Ancho de "SALDO"
 ]
 
+# Altura inicial de datos y altura de fila
 Y_DATA_1_PT = 104.73901
 Y_HEADER_PT = 92.448
 BOTTOM_MG_PT = 18.16 * MM_TO_PT
