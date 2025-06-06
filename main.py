@@ -35,8 +35,8 @@ COL_W_PT = [
 
 # Posiciones verticales
 Y_HEADER_PT = 50.0 * MM_TO_PT     # Altura del encabezado en páginas siguientes
-Y_DATA_1_PT = 106.73901           # Ajuste fino: alinea fecha con franjas grises
-BOTTOM_MG_PT = 18.16 * MM_TO_PT  # Margen inferior
+Y_DATA_1_PT = 106.73901            # Ajuste fino: alinea fecha con franjas grises
+BOTTOM_MG_PT = 18.16 * MM_TO_PT   # Margen inferior
 
 # Altura de fila base
 ROW_H_PT = 12  # Ajuste fino para mejorar espaciado visual
@@ -176,10 +176,10 @@ class BanamexPDF(FPDF):
         self.set_xy(X_COLS_PT[0], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[0], ROW_H_PT, fecha_str, 0, 0, 'L', False)
 
-        # CONCEPTO (con múltiples líneas) - alineado a la izquierda y subido un poco más arriba
-        line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2) - 5
+        # CONCEPTO (con múltiples líneas) - alineado a la izquierda y centrado verticalmente
+        line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2) - 1
         for i, line in enumerate(concept_lines):
-            self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 1)
+            self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 2)
             self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'L', False)
 
         # RETIROS - alineado a la derecha y centrado verticalmente
