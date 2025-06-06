@@ -2,110 +2,77 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from fpdf import FPDF
-import textwrap
 import io
 from datetime import datetime
 
-def parse_banamex_excel(df):
+def parse_banamex_excel_individual_rows(df):
     """
-    Parsea el Excel de Banamex manteniendo la estructura original
-    donde cada movimiento tiene:
-    - Una fila con fecha
-    - Varias filas de concepto
-    - Última fila con monto y saldo
+    Parsea el Excel de Banamex manteniendo CADA FILA INDIVIDUAL
+    tal como aparece en el Excel original
     """
     df = df.copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     
-    movimientos = []
-    i = 0
+    # Limpiar y procesar cada fila individualmente
+    filas_procesadas = []
     
-    while i < len(df):
-        fecha = df.iloc[i]['FECHA']
+    for idx, row in df.iterrows():
+        fila_procesada = {
+            'FECHA': str(row['FECHA']).strip() if pd.notna(row['FECHA']) and str(row['FECHA']).strip() != 'nan' else '',
+            'CONCEPTO': str(row['CONCEPTO']).strip() if pd.notna(row['CONCEPTO']) and str(row['CONCEPTO']).strip() != 'nan' else '',
+            'RETIROS': float(row['RETIROS']) if pd.notna(row['RETIROS']) and str(row['RETIROS']).strip() != 'nan' else None,
+            'DEPOSITOS': float(row['DEPOSITOS']) if pd.notna(row['DEPOSITOS']) and str(row['DEPOSITOS']).strip() != 'nan' else None,
+            'SALDO': float(row['SALDO']) if pd.notna(row['SALDO']) and str(row['SALDO']).strip() != 'nan' else None
+        }
         
-        if pd.notna(fecha) and str(fecha).strip() not in ['FECHA', 'nan']:
-            concepto_completo = ""
-            fecha_movimiento = str(fecha).strip()
-            
-            concepto_inicial = df.iloc[i]['CONCEPTO']
-            if pd.notna(concepto_inicial):
-                concepto_completo = str(concepto_inicial).strip()
-            
-            j = i + 1
-            monto_retiro = None
-            monto_deposito = None
-            saldo_final = None
-            
-            while j < len(df):
-                fila_actual = df.iloc[j]
-                
-                if pd.notna(fila_actual['FECHA']):
-                    break
-                
-                concepto_fila = fila_actual['CONCEPTO']
-                if pd.notna(concepto_fila):
-                    concepto_texto = str(concepto_fila).strip()
-                    if concepto_texto and concepto_texto != 'nan':
-                        concepto_completo += " " + concepto_texto
-                
-                retiro = fila_actual['RETIROS']
-                deposito = fila_actual['DEPOSITOS']
-                saldo = fila_actual['SALDO']
-                
-                if pd.notna(retiro) and str(retiro).strip() != 'nan':
-                    monto_retiro = float(retiro)
-                
-                if pd.notna(deposito) and str(deposito).strip() != 'nan':
-                    monto_deposito = float(deposito)
-                
-                if pd.notna(saldo) and str(saldo).strip() != 'nan':
-                    saldo_final = float(saldo)
-                
-                if (monto_retiro is not None or monto_deposito is not None) and saldo_final is not None:
-                    break
-                
-                j += 1
-            
-            if concepto_completo.strip() and concepto_completo.strip() != 'nan':
-                movimiento = {
-                    'Fecha': fecha_movimiento,
-                    'Concepto': concepto_completo.strip(),
-                    'Retiros': monto_retiro if monto_retiro else 0.0,
-                    'Depositos': monto_deposito if monto_deposito else 0.0,
-                    'Saldo': saldo_final if saldo_final else 0.0
-                }
-                movimientos.append(movimiento)
-            
-            i = j
-        else:
-            i += 1
+        # Solo agregar filas que no sean completamente vacías
+        if any([fila_procesada['FECHA'], fila_procesada['CONCEPTO'], 
+                fila_procesada['RETIROS'], fila_procesada['DEPOSITOS'], fila_procesada['SALDO']]):
+            filas_procesadas.append(fila_procesada)
     
-    return pd.DataFrame(movimientos)
+    return pd.DataFrame(filas_procesadas)
 
-class BanamexEstadoCuentaPDF(FPDF):
+class BanamexEstadoCuentaPDFOriginal(FPDF):
     def __init__(self, cliente="", numero_cliente="", periodo=""):
         super().__init__(orientation='P', unit='mm', format='A4')
         self.cliente = cliente
         self.numero_cliente = numero_cliente
         self.periodo = periodo
-        self.set_auto_page_break(auto=True, margin=15)
+        self.set_auto_page_break(auto=True, margin=20)
         self.page_num = 1
         
     def header(self):
-        self.set_font('Arial', 'B', 12)
+        # Título principal
+        self.set_font('Arial', 'B', 14)
         self.cell(0, 8, f'ESTADO DE CUENTA AL {self.periodo.upper()}', 0, 1, 'C')
+        self.ln(2)
+        
+        # Información del cliente
+        self.set_font('Arial', 'B', 10)
+        self.cell(40, 6, 'CLIENTE:', 0, 0, 'L')
+        self.cell(0, 6, f'Página: {self.page_num} de 29', 0, 1, 'R')
         
         self.set_font('Arial', '', 10)
-        self.cell(0, 6, f'CLIENTE: {self.numero_cliente}', 0, 0, 'L')
-        self.cell(0, 6, f'Página: {self.page_num}', 0, 1, 'R')
+        self.cell(0, 6, self.numero_cliente, 0, 1, 'L')
         
         self.set_font('Arial', 'B', 10)
         self.cell(0, 6, self.cliente, 0, 1, 'L')
         self.ln(3)
         
-        self.set_font('Arial', 'B', 11)
-        self.cell(0, 8, 'DETALLE DE OPERACIONES', 0, 1, 'L')
+        # Información adicional en páginas > 1
+        if self.page_num > 1:
+            self.set_font('Arial', '', 8)
+            self.cell(0, 4, 'Centro de Atención Telefónica', 0, 1, 'L')
+            self.cell(0, 4, 'Ciudad de México: 55 1226 2639', 0, 1, 'L')
+            self.cell(0, 4, 'Resto del país: 800 021 2345', 0, 1, 'L')
+            self.ln(2)
         
+        # Título de la tabla
+        self.set_font('Arial', 'B', 11)
+        self.cell(0, 6, 'DETALLE DE OPERACIONES', 0, 1, 'L')
+        self.ln(1)
+        
+        # Encabezados de la tabla
         self.set_font('Arial', 'B', 9)
         headers = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
         widths = [20, 95, 25, 25, 25]
@@ -119,57 +86,35 @@ class BanamexEstadoCuentaPDF(FPDF):
         self.set_font('Arial', '', 8)
         self.cell(0, 10, '000191.B41EJDA029.OD.0121.01', 0, 0, 'L')
     
-    def add_movimiento(self, fecha, concepto, retiros, depositos, saldo):
+    def add_fila_individual(self, fecha, concepto, retiros, depositos, saldo):
+        """
+        Agrega UNA SOLA FILA a la tabla, exactamente como aparece en el Excel
+        """
         widths = [20, 95, 25, 25, 25]
+        aligns = ['C', 'L', 'R', 'R', 'R']
         
-        self.set_font('Arial', '', 8)
-        max_chars_per_line = 45
-        concepto_lines = textwrap.wrap(concepto, max_chars_per_line)
-        if not concepto_lines:
-            concepto_lines = ['']
-        
-        row_height = 4
-        total_height = len(concepto_lines) * row_height
-        
-        if self.get_y() + total_height > self.page_break_trigger:
+        # Verificar si necesitamos nueva página
+        if self.get_y() + 6 > self.page_break_trigger:
             self.add_page()
             self.page_num += 1
         
-        start_x = self.get_x()
-        start_y = self.get_y()
+        # Preparar valores para mostrar
+        valores = [
+            fecha if fecha else '',
+            concepto if concepto else '',
+            f'{retiros:,.2f}' if retiros is not None and retiros != 0 else '',
+            f'{depositos:,.2f}' if depositos is not None and depositos != 0 else '',
+            f'{saldo:,.2f}' if saldo is not None and saldo != 0 else ''
+        ]
         
-        # Fecha
-        self.set_xy(start_x, start_y)
-        self.cell(widths[0], total_height, fecha, 1, 0, 'C')
+        # Configurar fuente para el contenido
+        self.set_font('Arial', '', 8)
         
-        # Concepto multilínea
-        self.set_xy(start_x + widths[0], start_y)
-        for i, line in enumerate(concepto_lines):
-            if i == 0:
-                self.cell(widths[1], row_height, line, 'LRT', 0, 'L')
-            elif i == len(concepto_lines) - 1:
-                self.set_xy(start_x + widths[0], start_y + i * row_height)
-                self.cell(widths[1], row_height, line, 'LRB', 0, 'L')
-            else:
-                self.set_xy(start_x + widths[0], start_y + i * row_height)
-                self.cell(widths[1], row_height, line, 'LR', 0, 'L')
+        # Agregar cada celda
+        for i, (valor, width, align) in enumerate(zip(valores, widths, aligns)):
+            self.cell(width, 6, valor, 1, 0, align)
         
-        # Retiros
-        retiros_text = f'{retiros:,.2f}' if retiros > 0 else ''
-        self.set_xy(start_x + widths[0] + widths[1], start_y)
-        self.cell(widths[2], total_height, retiros_text, 1, 0, 'R')
-        
-        # Depósitos
-        depositos_text = f'{depositos:,.2f}' if depositos > 0 else ''
-        self.set_xy(start_x + widths[0] + widths[1] + widths[2], start_y)
-        self.cell(widths[3], total_height, depositos_text, 1, 0, 'R')
-        
-        # Saldo
-        saldo_text = f'{saldo:,.2f}' if saldo != 0 else ''
-        self.set_xy(start_x + widths[0] + widths[1] + widths[2] + widths[3], start_y)
-        self.cell(widths[4], total_height, saldo_text, 1, 0, 'R')
-        
-        self.set_xy(start_x, start_y + total_height)
+        self.ln()
 
 # Streamlit App
 st.set_page_config(
@@ -179,7 +124,7 @@ st.set_page_config(
 )
 
 st.title("🏦 Conversor Estado de Cuenta Banamex")
-st.markdown("**Excel → PDF con formato idéntico al original**")
+st.markdown("**Excel → PDF con formato IDÉNTICO al original (fila por fila)**")
 st.markdown("---")
 
 # Sidebar con información
@@ -195,7 +140,7 @@ with st.sidebar:
     1. Sube el archivo Excel exportado del PDF
     2. Verifica los datos procesados
     3. Ajusta la información del cliente
-    4. Genera el PDF idéntico al original
+    4. Genera el PDF IDÉNTICO al original
     """)
 
 # Área principal
@@ -218,49 +163,51 @@ if uploaded_file is not None:
     try:
         # Procesar el archivo
         df_original = pd.read_excel(uploaded_file)
-        df_movimientos = parse_banamex_excel(df_original)
+        df_filas = parse_banamex_excel_individual_rows(df_original)
         
-        st.success(f"✅ Procesados {len(df_movimientos)} movimientos exitosamente")
+        st.success(f"✅ Procesadas {len(df_filas)} filas exitosamente")
         
         # Mostrar estadísticas
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("📊 Total Movimientos", len(df_movimientos))
+            st.metric("📊 Total Filas", len(df_filas))
         
         with col2:
-            total_retiros = df_movimientos['Retiros'].sum()
+            total_retiros = df_filas['RETIROS'].sum() if 'RETIROS' in df_filas.columns else 0
             st.metric("💸 Total Retiros", f"${total_retiros:,.2f}")
         
         with col3:
-            total_depositos = df_movimientos['Depositos'].sum()
+            total_depositos = df_filas['DEPOSITOS'].sum() if 'DEPOSITOS' in df_filas.columns else 0
             st.metric("💰 Total Depósitos", f"${total_depositos:,.2f}")
         
         with col4:
-            saldo_final = df_movimientos['Saldo'].iloc[-1] if len(df_movimientos) > 0 else 0
+            # Buscar el último saldo no nulo
+            saldos_validos = df_filas[df_filas['SALDO'].notna()]['SALDO']
+            saldo_final = saldos_validos.iloc[-1] if len(saldos_validos) > 0 else 0
             st.metric("🏦 Saldo Final", f"${saldo_final:,.2f}")
         
         # Mostrar vista previa de los datos
-        st.header("👀 Vista Previa de Movimientos")
+        st.header("👀 Vista Previa de Filas (Formato Original)")
         st.dataframe(
-            df_movimientos.head(10),
+            df_filas.head(15),
             use_container_width=True,
             column_config={
-                "Retiros": st.column_config.NumberColumn(format="$%.2f"),
-                "Depositos": st.column_config.NumberColumn(format="$%.2f"),
-                "Saldo": st.column_config.NumberColumn(format="$%.2f")
+                "RETIROS": st.column_config.NumberColumn(format="$%.2f"),
+                "DEPOSITOS": st.column_config.NumberColumn(format="$%.2f"),
+                "SALDO": st.column_config.NumberColumn(format="$%.2f")
             }
         )
         
-        if len(df_movimientos) > 10:
-            st.info(f"Mostrando los primeros 10 de {len(df_movimientos)} movimientos")
+        if len(df_filas) > 15:
+            st.info(f"Mostrando las primeras 15 de {len(df_filas)} filas")
         
         # Botón para generar PDF
         st.markdown("---")
-        if st.button("🔄 Generar PDF Estado de Cuenta", type="primary", use_container_width=True):
-            with st.spinner("Generando PDF idéntico al formato Banamex..."):
+        if st.button("🔄 Generar PDF Estado de Cuenta (Formato Original)", type="primary", use_container_width=True):
+            with st.spinner("Generando PDF IDÉNTICO al formato Banamex original..."):
                 # Crear PDF
-                pdf = BanamexEstadoCuentaPDF(
+                pdf = BanamexEstadoCuentaPDFOriginal(
                     cliente=cliente,
                     numero_cliente=numero_cliente,
                     periodo=periodo
@@ -268,14 +215,14 @@ if uploaded_file is not None:
                 
                 pdf.add_page()
                 
-                # Agregar todos los movimientos
-                for _, row in df_movimientos.iterrows():
-                    pdf.add_movimiento(
-                        fecha=row['Fecha'],
-                        concepto=row['Concepto'],
-                        retiros=row['Retiros'],
-                        depositos=row['Depositos'],
-                        saldo=row['Saldo']
+                # Agregar CADA FILA INDIVIDUAL
+                for _, row in df_filas.iterrows():
+                    pdf.add_fila_individual(
+                        fecha=row['FECHA'],
+                        concepto=row['CONCEPTO'],
+                        retiros=row['RETIROS'],
+                        depositos=row['DEPOSITOS'],
+                        saldo=row['SALDO']
                     )
                 
                 # Generar PDF en memoria
@@ -283,13 +230,13 @@ if uploaded_file is not None:
                 pdf.output(buffer)
                 pdf_bytes = buffer.getvalue()
                 
-                st.success("✅ PDF generado exitosamente!")
+                st.success("✅ PDF generado exitosamente con formato IDÉNTICO!")
                 
                 # Botón de descarga
                 st.download_button(
-                    label="📥 Descargar Estado de Cuenta PDF",
+                    label="📥 Descargar Estado de Cuenta PDF (Formato Original)",
                     data=pdf_bytes,
-                    file_name=f"estado_cuenta_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    file_name=f"estado_cuenta_original_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
@@ -304,19 +251,19 @@ else:
     # Mostrar ejemplo de estructura esperada
     with st.expander("📋 Ver estructura esperada del Excel"):
         st.markdown("""
-        **El Excel debe tener esta estructura:**
+        **El Excel debe tener esta estructura (FILA POR FILA):**
         
         | FECHA | CONCEPTO | RETIROS | DEPOSITOS | SALDO |
         |-------|----------|---------|-----------|-------|
-        | 22 DIC | SALDO ANTERIOR | | | 3000 |
+        | 22 DIC | SALDO ANTERIOR | | | 44230.27 |
         | 23 DIC | DEPOSITO POR DEVOLUCION DE | | | |
         | | MERCANCIA | | | |
-        | | 75445504354481090854912 | | | |
+        | | 75445504354481086801511 | | | |
         | | SUC 0342 | | | |
-        | | CAJA 0093 AUT 02132404 HORA 06:46 | | 2000 | 5000 |
+        | | CAJA 0093 AUT 02132404 HORA 06:46 | | 208.86 | 44439.13 |
         
-        **Cada movimiento tiene:**
-        - Una fila con fecha
-        - Varias filas con el concepto completo
-        - La última fila con el monto y saldo final
+        **Cada fila del Excel = Una fila en el PDF**
+        - No se agrupan conceptos
+        - Cada línea se respeta individualmente
+        - Formato idéntico al PDF original de Banamex
         """)
