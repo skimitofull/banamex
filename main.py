@@ -13,12 +13,12 @@ PAGE_H_PT = 279.40 * MM_TO_PT
 LINE_WIDTH_PT = 0.75
 LINE_COLOR = 0  # Negro (0 para escala de grises)
 
-# Posiciones X de las líneas (en puntos)
+# Posiciones X de las 4 líneas verticales (desde el borde izquierdo 0mm)
 X_LINE_POS_PT = [
-    20.11 * MM_TO_PT,   # Primera línea
-    91.12 * MM_TO_PT,   # Segunda línea
-    115.68 * MM_TO_PT,  # Tercera línea
-    142.35 * MM_TO_PT   # Cuarta línea
+    20.11 * MM_TO_PT,   # Primera línea a 20.11mm
+    91.12 * MM_TO_PT,   # Segunda línea a 91.12mm
+    115.68 * MM_TO_PT,  # Tercera línea a 115.68mm
+    142.35 * MM_TO_PT   # Cuarta línea a 142.35mm
 ]
 
 # Posición Y de inicio de las líneas (en puntos)
@@ -27,12 +27,26 @@ Y_LINE_START_PT = 31.77 * MM_TO_PT
 # Longitud de las líneas (en puntos)
 LINE_LENGTH_PT = 228.88 * MM_TO_PT
 
-# Posiciones X de las columnas (en puntos)
-X_COLS_PT = [5.07 * MM_TO_PT, 20.47 * MM_TO_PT, 105.12 * MM_TO_PT, 131.46 * MM_TO_PT, 153.27 * MM_TO_PT]
+# Posiciones X de las columnas (ajustadas para alinearse con las líneas)
+X_COLS_PT = [
+    5.07 * MM_TO_PT,    # FECHA - alineada con inicio de líneas grises
+    20.11 * MM_TO_PT,   # CONCEPTO - alineada con primera línea
+    91.12 * MM_TO_PT,   # RETIROS - alineada con segunda línea
+    115.68 * MM_TO_PT,  # DEPOSITOS - alineada con tercera línea
+    142.35 * MM_TO_PT   # SALDO - alineada con cuarta línea
+]
+
 X_BAND_L_PT = 4.97 * MM_TO_PT
 X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT
-COL_W_PT = [X_COLS_PT[i+1] - X_COLS_PT[i] for i in range(4)]
-COL_W_PT.append(X_BAND_R_PT - X_COLS_PT[-1])
+
+# Anchos de columnas calculados entre las líneas
+COL_W_PT = [
+    X_COLS_PT[1] - X_COLS_PT[0],  # FECHA
+    X_COLS_PT[2] - X_COLS_PT[1],  # CONCEPTO
+    X_COLS_PT[3] - X_COLS_PT[2],  # RETIROS
+    X_COLS_PT[4] - X_COLS_PT[3],  # DEPOSITOS
+    X_BAND_R_PT - X_COLS_PT[4]    # SALDO
+]
 
 Y_DATA_1_PT = 104.73901
 Y_HEADER_PT = 92.448
@@ -109,17 +123,25 @@ class BanamexPDF(FPDF):
         self.cell(0, 10, self.cliente, 0, 1)
         self.set_font('Helvetica', 'B', 9)
         self.set_y(Y_HEADER_PT)
+        
+        # Headers de las columnas
         headers = ['FECHA','CONCEPTO','RETIROS','DEPÓSITOS','SALDO']
         for i, h in enumerate(headers):
             self.set_x(X_COLS_PT[i])
             self.cell(COL_W_PT[i], ROW_H_PT, h, 0, 0, 'C', True)
-            # Dibujar las líneas verticales
+        
+        # Dibujar las 4 líneas verticales con medidas exactas
         self.set_line_width(LINE_WIDTH_PT)
         self.set_draw_color(LINE_COLOR)
-        for x in X_LINE_POS_PT:
-            self.line(x, Y_LINE_START_PT, x, Y_LINE_START_PT + LINE_LENGTH_PT)
+        
+        # Dibujar cada una de las 4 líneas verticales
+        for x_pos in X_LINE_POS_PT:
+            self.line(x_pos, Y_LINE_START_PT, x_pos, Y_LINE_START_PT + LINE_LENGTH_PT)
+        
+        # Línea horizontal debajo del header
         self.line(X_BAND_L_PT, Y_HEADER_PT+ROW_H_PT,
                   X_BAND_R_PT, Y_HEADER_PT+ROW_H_PT)
+        
         self.rows_in_page = 0
         self.set_y(Y_DATA_1_PT)
 
@@ -137,7 +159,7 @@ class BanamexPDF(FPDF):
         else:
             self.set_fill_color(191, 191, 191)
 
-        # AQUÍ ESTÁ LA CLAVE: usar funciones diferentes para texto y montos
+        # Usar funciones diferentes para texto y montos
         vals = [
             clean_cell(fecha),      # Para FECHA (texto)
             clean_cell(concepto),   # Para CONCEPTO (texto)
@@ -150,18 +172,17 @@ class BanamexPDF(FPDF):
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
         
+        # Dibujar cada celda
         for i, val in enumerate(vals):
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
-            if i < 4:
-                self.line(X_COLS_PT[i+1], y, X_COLS_PT[i+1], y+ROW_H_PT)
         
         self.rows_in_page += 1
         self.row_global += 1
 
 # INTERFAZ DE STREAMLIT
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
-st.title('🏦 Conversor Estado de Cuenta Banamex – SIN NAN ✅')
+st.title('🏦 Conversor Estado de Cuenta Banamex – Líneas Corregidas ✅')
 
 with st.sidebar:
     st.header('📋 Datos del cliente')
@@ -172,12 +193,11 @@ with st.sidebar:
     st.markdown('---')
     st.markdown('### ✅ Características')
     st.markdown('''
-    * **Página:** 187.33 mm × 279.4 mm
-    * **Fuente:** Helvetica 9 pt
-    * **Filtro Anti-NAN:** ✅ ACTIVO
-    * **Alternado:** Blanco / Gris #BFBFBF
-    * **Líneas:** Negras entre columnas
-    * **Formato:** Idéntico al original Banamex
+    * **4 Líneas Verticales:** ✅ Corregido
+    * **Medidas Exactas:** 20.11, 91.12, 115.68, 142.35mm
+    * **Grosor:** 0.75pt Negro
+    * **Longitud:** 228.88mm desde 31.77mm
+    * **Alineación:** Fechas alineadas con líneas grises
     ''')
 
 st.markdown('### 📁 Subir archivo Excel')
