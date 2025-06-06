@@ -32,7 +32,8 @@ def parse_banamex_excel_individual_rows(df):
 
 class BanamexEstadoCuentaPDFExacto(FPDF):
     def __init__(self, cliente="", numero_cliente="", periodo=""):
-        super().__init__(orientation='P', unit='mm', format='A4')
+        # Tamaño exacto: 187.33 mm x 279.4 mm = 531 pt x 792 pt
+        super().__init__(orientation='P', unit='pt', format=(531, 792))
         self.cliente = cliente
         self.numero_cliente = numero_cliente
         self.periodo = periodo
@@ -40,62 +41,84 @@ class BanamexEstadoCuentaPDFExacto(FPDF):
         self.page_num = 1
         self.filas_en_pagina = 0
         self.max_filas_por_pagina = 52  # Máximo 52 filas incluyendo encabezado
+        self.y_inicial_datos = 104.73901  # Posición inicial de los datos
+        self.altura_fila = 12.3037  # Altura calculada: (733.54797 - 104.73901) / 51
+        self.fila_global = 0  # Contador global para alternado de colores
+        
+        # Posiciones horizontales exactas
+        self.x_fecha = 14.361
+        self.x_concepto = 57.378  # Calculado desde FECHA + ancho
+        self.x_retiros = 369.129
+        self.x_depositos = 440.0  # Calculado desde RETIROS + ancho
+        self.x_saldo = 510.87  # Calculado desde DEPOSITOS + ancho
+        
+        # Anchos de columnas exactos
+        self.w_fecha = 43.017  # x_concepto - x_fecha
+        self.w_concepto = 311.751  # x_retiros - x_concepto
+        self.w_retiros = 70.871  # x_depositos - x_retiros
+        self.w_depositos = 70.87  # x_saldo - x_depositos
+        self.w_saldo = 70.87  # Ancho restante
         
     def header(self):
         # Título principal
         self.set_font('Helvetica', 'B', 14)
-        self.cell(0, 8, f'ESTADO DE CUENTA AL {self.periodo.upper()}', 0, 1, 'C')
-        self.ln(2)
+        self.set_xy(0, 20)
+        self.cell(531, 14, f'ESTADO DE CUENTA AL {self.periodo.upper()}', 0, 1, 'C')
         
         # Información del cliente
         self.set_font('Helvetica', 'B', 10)
-        self.cell(40, 6, 'CLIENTE:', 0, 0, 'L')
-        self.cell(0, 6, f'Página: {self.page_num} de 29', 0, 1, 'R')
+        self.set_xy(14.361, 45)
+        self.cell(200, 10, 'CLIENTE:', 0, 0, 'L')
+        self.set_xy(350, 45)
+        self.cell(0, 10, f'Página: {self.page_num} de 29', 0, 0, 'R')
         
         self.set_font('Helvetica', '', 10)
-        self.cell(0, 6, self.numero_cliente, 0, 1, 'L')
+        self.set_xy(14.361, 58)
+        self.cell(0, 10, self.numero_cliente, 0, 0, 'L')
         
         self.set_font('Helvetica', 'B', 10)
-        self.cell(0, 6, self.cliente, 0, 1, 'L')
-        self.ln(3)
+        self.set_xy(14.361, 71)
+        self.cell(0, 10, self.cliente, 0, 0, 'L')
         
         # Información adicional en páginas > 1
         if self.page_num > 1:
             self.set_font('Helvetica', '', 8)
-            self.cell(0, 4, 'Centro de Atención Telefónica', 0, 1, 'L')
-            self.cell(0, 4, 'Ciudad de México: 55 1226 2639', 0, 1, 'L')
-            self.cell(0, 4, 'Resto del país: 800 021 2345', 0, 1, 'L')
-            self.ln(2)
+            self.set_xy(14.361, 45)
+            self.cell(0, 4, 'Centro de Atención Telefónica', 0, 0, 'L')
+            self.set_xy(14.361, 52)
+            self.cell(0, 4, 'Ciudad de México: 55 1226 2639', 0, 0, 'L')
+            self.set_xy(14.361, 59)
+            self.cell(0, 4, 'Resto del país: 800 021 2345', 0, 0, 'L')
         
         # Título de la tabla
         self.set_font('Helvetica', 'B', 11)
-        self.cell(0, 6, 'DETALLE DE OPERACIONES', 0, 1, 'L')
-        self.ln(1)
+        self.set_xy(14.361, 80)
+        self.cell(0, 11, 'DETALLE DE OPERACIONES', 0, 0, 'L')
         
-        # Encabezados de la tabla con fondo blanco y líneas
+        # Encabezados de la tabla
         self.set_font('Helvetica', 'B', 9)
         self.set_fill_color(255, 255, 255)  # Fondo blanco para encabezado
         self.set_draw_color(0, 0, 0)  # Líneas negras
         
         headers = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
-        widths = [20, 95, 25, 25, 25]
+        x_positions = [self.x_fecha, self.x_concepto, self.x_retiros, self.x_depositos, self.x_saldo]
+        widths = [self.w_fecha, self.w_concepto, self.w_retiros, self.w_depositos, self.w_saldo]
         
-        x_start = self.get_x()
-        y_start = self.get_y()
+        y_header = 92.448
         
-        # Dibujar encabezados con líneas verticales
-        for i, (header, width) in enumerate(zip(headers, widths)):
-            self.cell(width, 6, header, 0, 0, 'C', True)
+        # Dibujar encabezados
+        for i, (header, x_pos, width) in enumerate(zip(headers, x_positions, widths)):
+            self.set_xy(x_pos, y_header)
+            self.cell(width, self.altura_fila, header, 0, 0, 'C', True)
             
             # Líneas verticales (excepto después de la última columna)
             if i < len(headers) - 1:
-                x_pos = x_start + sum(widths[:i+1])
-                self.line(x_pos, y_start, x_pos, y_start + 6)
-        
-        self.ln()
+                x_line = x_pos + width
+                self.line(x_line, y_header, x_line, y_header + self.altura_fila)
         
         # Línea horizontal debajo del encabezado
-        self.line(x_start, self.get_y(), x_start + sum(widths), self.get_y())
+        self.line(self.x_fecha, y_header + self.altura_fila, 
+                 self.x_saldo + self.w_saldo, y_header + self.altura_fila)
         
         # Resetear contador de filas (encabezado cuenta como 1)
         self.filas_en_pagina = 1
@@ -103,9 +126,10 @@ class BanamexEstadoCuentaPDFExacto(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font('Helvetica', '', 8)
+        self.set_x(14.361)
         self.cell(0, 10, '000191.B41EJDA029.OD.0121.01', 0, 0, 'L')
     
-    def add_fila_individual(self, fecha, concepto, retiros, depositos, saldo, fila_numero):
+    def add_fila_individual(self, fecha, concepto, retiros, depositos, saldo):
         """
         Agrega UNA SOLA FILA con formato exacto: filas alternadas y líneas verticales
         """
@@ -115,11 +139,8 @@ class BanamexEstadoCuentaPDFExacto(FPDF):
             self.page_num += 1
             self.filas_en_pagina = 1  # Reset después del encabezado
         
-        widths = [20, 95, 25, 25, 25]
-        aligns = ['C', 'L', 'R', 'R', 'R']
-        
-        # Alternar colores de fondo: fila par = blanca, fila impar = gris
-        if (fila_numero + self.filas_en_pagina) % 2 == 0:
+        # Alternar colores de fondo basado en fila global
+        if self.fila_global % 2 == 0:
             self.set_fill_color(255, 255, 255)  # Blanco
         else:
             self.set_fill_color(191, 191, 191)  # Gris #bfbfbf
@@ -138,20 +159,26 @@ class BanamexEstadoCuentaPDFExacto(FPDF):
         # Configurar fuente para el contenido
         self.set_font('Helvetica', '', 9)
         
-        x_start = self.get_x()
-        y_start = self.get_y()
+        # Calcular posición Y de la fila actual
+        y_actual = self.y_inicial_datos + (self.filas_en_pagina - 1) * self.altura_fila
+        
+        # Posiciones y anchos
+        x_positions = [self.x_fecha, self.x_concepto, self.x_retiros, self.x_depositos, self.x_saldo]
+        widths = [self.w_fecha, self.w_concepto, self.w_retiros, self.w_depositos, self.w_saldo]
+        aligns = ['C', 'L', 'R', 'R', 'R']
         
         # Agregar cada celda con fondo alternado
-        for i, (valor, width, align) in enumerate(zip(valores, widths, aligns)):
-            self.cell(width, 6, valor, 0, 0, align, True)
+        for i, (valor, x_pos, width, align) in enumerate(zip(valores, x_positions, widths, aligns)):
+            self.set_xy(x_pos, y_actual)
+            self.cell(width, self.altura_fila, valor, 0, 0, align, True)
             
             # Líneas verticales (excepto después de la última columna)
             if i < len(valores) - 1:
-                x_pos = x_start + sum(widths[:i+1])
-                self.line(x_pos, y_start, x_pos, y_start + 6)
+                x_line = x_pos + width
+                self.line(x_line, y_actual, x_line, y_actual + self.altura_fila)
         
-        self.ln()
         self.filas_en_pagina += 1
+        self.fila_global += 1  # Incrementar contador global para alternado
 
 # Streamlit App
 st.set_page_config(
@@ -161,7 +188,7 @@ st.set_page_config(
 )
 
 st.title("🏦 Conversor Estado de Cuenta Banamex")
-st.markdown("**Excel → PDF con formato EXACTO (Helvetica, filas alternadas, líneas negras)**")
+st.markdown("**Excel → PDF con formato EXACTO (187.33mm x 279.4mm, Helvetica, filas alternadas)**")
 st.markdown("---")
 
 # Sidebar con información
@@ -172,13 +199,15 @@ with st.sidebar:
     periodo = st.text_input("Período", "21 DE ENERO DE 2025")
     
     st.markdown("---")
-    st.markdown("### 📖 Especificaciones")
+    st.markdown("### 📖 Especificaciones Exactas")
     st.markdown("""
-    ✅ **Helvetica tamaño 9**  
-    ✅ **Filas alternadas** (blanca/gris #bfbfbf)  
-    ✅ **Máximo 52 filas** por página  
+    ✅ **Tamaño:** 187.33mm x 279.4mm (531pt x 792pt)  
+    ✅ **Fuente:** Helvetica tamaño 9  
+    ✅ **Filas alternadas:** Blanca/gris #bfbfbf (global)  
+    ✅ **Máximo:** 52 filas por página  
     ✅ **Líneas verticales negras** entre columnas  
-    ✅ **Cada fila del Excel = una fila del PDF**
+    ✅ **Posiciones exactas en puntos (pts)**  
+    ✅ **Sin empalme de filas**
     """)
 
 # Área principal
@@ -242,7 +271,7 @@ if uploaded_file is not None:
         
         # Botón para generar PDF
         st.markdown("---")
-        if st.button("🔄 Generar PDF EXACTO (Helvetica + Filas Alternadas)", type="primary", use_container_width=True):
+        if st.button("🔄 Generar PDF EXACTO (187.33mm x 279.4mm)", type="primary", use_container_width=True):
             with st.spinner("Generando PDF con formato EXACTO de Banamex..."):
                 # Crear PDF
                 pdf = BanamexEstadoCuentaPDFExacto(
@@ -254,14 +283,13 @@ if uploaded_file is not None:
                 pdf.add_page()
                 
                 # Agregar CADA FILA INDIVIDUAL con formato exacto
-                for idx, (_, row) in enumerate(df_filas.iterrows()):
+                for _, row in df_filas.iterrows():
                     pdf.add_fila_individual(
                         fecha=row['FECHA'],
                         concepto=row['CONCEPTO'],
                         retiros=row['RETIROS'],
                         depositos=row['DEPOSITOS'],
-                        saldo=row['SALDO'],
-                        fila_numero=idx
+                        saldo=row['SALDO']
                     )
                 
                 # Generar PDF en memoria
@@ -273,7 +301,7 @@ if uploaded_file is not None:
                 
                 # Botón de descarga
                 st.download_button(
-                    label="📥 Descargar PDF EXACTO (Helvetica + Alternado)",
+                    label="📥 Descargar PDF EXACTO (187.33mm x 279.4mm)",
                     data=pdf_bytes,
                     file_name=f"estado_cuenta_exacto_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
@@ -292,11 +320,14 @@ else:
         st.markdown("""
         **✅ Características implementadas:**
         
+        - **Tamaño exacto:** 187.33mm x 279.4mm (531pt x 792pt)
         - **Fuente:** Helvetica tamaño 9
-        - **Filas alternadas:** Blanca y gris (#bfbfbf)
-        - **Máximo:** 52 filas por página (incluyendo encabezado)
-        - **Líneas:** Verticales negras entre columnas (excepto la última)
-        - **Línea horizontal:** Debajo del encabezado
+        - **Filas alternadas:** Blanca y gris (#bfbfbf) - alternado global
+        - **Máximo 52 filas** por página (incluyendo encabezado)
+        - **Líneas verticales negras** entre columnas (excepto la última)
+        - **Línea horizontal negra** debajo del encabezado
+        - **Posiciones exactas en puntos (pts)** según el original
+        - **Sin empalme de filas** - altura calculada exactamente
         - **Cada fila del Excel = Una fila en el PDF**
         
         **El resultado será IDÉNTICO al PDF original de Banamex** 🎯
