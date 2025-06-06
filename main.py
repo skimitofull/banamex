@@ -81,12 +81,11 @@ def parse_excel(df):
     return pd.DataFrame(parsed)
 
 class BanamexPDF(FPDF):
-    def __init__(self, cliente, num_cte, periodo, logo_path='assets/logo_banamex.png'):
+    def __init__(self, cliente, num_cte, periodo):
         super().__init__(unit='pt', format=(PAGE_W_PT, PAGE_H_PT))
         self.cliente = cliente
         self.num_cte = num_cte
         self.periodo = periodo
-        self.logo_path = logo_path
         self.set_auto_page_break(False)
         self.page_no_global = 0
         self.row_global = 0
@@ -94,7 +93,6 @@ class BanamexPDF(FPDF):
 
     def header(self):
         if self.is_first_page:
-            self.image(self.logo_path, x=100, y=20, w=100)  # Ajusta x, y, w según sea necesario
             self.is_first_page = False
             self.rows_in_page = 0
             self.set_y(Y_DATA_1_PT)
@@ -140,7 +138,7 @@ class BanamexPDF(FPDF):
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], False)
 
         # Dibuja líneas encima de la celda
-        self.set_line_width(1.0)
+        self.set_line_width(1.0)  # Grosor aumentado a 1 pt
         self.set_draw_color(0)
         for x in X_LINE_PT:
             self.line(x, y, x, y + ROW_H_PT)
@@ -175,7 +173,7 @@ if excel_file:
         if st.button('🚀 Generar PDF Estado de Cuenta', type='primary', use_container_width=True):
             with st.spinner('Generando PDF con formato Banamex...'):
                 try:
-                    pdf = BanamexPDF(cliente, numcte, periodo, logo_path='assets/logo_banamex.png')
+                    pdf = BanamexPDF(cliente, numcte, periodo)
                     pdf.add_page()
                     for _, r in df.iterrows():
                         pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
