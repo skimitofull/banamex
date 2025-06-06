@@ -13,9 +13,8 @@ PAGE_H_PT = 279.40 * MM_TO_PT
 # Líneas verticales (en mm desde el borde izquierdo) - Valores corregidos
 X_LINE_MM = [20.00, 91.13, 115.78, 142.45]
 X_LINE_PT = [x * MM_TO_PT for x in X_LINE_MM]
-Y_LINE_START_PT = 32.61 * MM_TO_PT  # Altura corregida desde el borde superior
+Y_LINE_START_PT = 32.61 * MM_TO_PT
 LINE_LENGTH_PT = 228.88 * MM_TO_PT
-LINE_WIDTH_PT = 0.75  # Grosor de línea en puntos
 
 # Columnas (en puntos)
 X_COLS_PT = [
@@ -37,8 +36,7 @@ COL_W_PT = [
 ]
 
 # Altura inicial de datos y altura de fila
-Y_DATA_1_PT = 104.73901
-Y_HEADER_PT = 92.448
+Y_DATA_1_PT = 104.73901  # Puedes ajustar este valor si la fecha no está centrada
 BOTTOM_MG_PT = 18.16 * MM_TO_PT
 ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
@@ -83,45 +81,51 @@ def parse_excel(df):
     return pd.DataFrame(parsed)
 
 class BanamexPDF(FPDF):
-    def __init__(self, cliente, num_cte, periodo):
+    def __init__(self, cliente, num_cte, periodo, logo_path='assets/logo_banamex.png'):
         super().__init__(unit='pt', format=(PAGE_W_PT, PAGE_H_PT))
         self.cliente = cliente
         self.num_cte = num_cte
         self.periodo = periodo
+        self.logo_path = logo_path
         self.set_auto_page_break(False)
         self.page_no_global = 0
         self.row_global = 0
         self.is_first_page = True
 
     def header(self):
-        # No header en la primera hoja
         if self.is_first_page:
+            self.image(self.logo_path, x=100, y=20, w=100)  # Ajusta x, y, w según sea necesario
             self.is_first_page = False
             self.rows_in_page = 0
             self.set_y(Y_DATA_1_PT)
-            return
-
-        # Header normal en las siguientes hojas
-        self.page_no_global += 1
-        self.set_font('Helvetica', 'B', 9)
-        self.set_y(Y_HEADER_PT)
-        headers = ['FECHA','CONCEPTO','RETIROS','DEPÓSITOS','SALDO']
-        for i, h in enumerate(headers):
-            self.set_x(X_COLS_PT[i])
-            self.cell(COL_W_PT[i], ROW_H_PT, h, 0, 0, 'C', True)
-        self.rows_in_page = 0
-        self.set_y(Y_DATA_1_PT)
+        else:
+            # Encabezado normal en páginas siguientes
+            self.page_no_global += 1
+            self.set_font('Helvetica', 'B', 9)
+            self.set_y(Y_HEADER_PT)
+            headers = ['FECHA','CONCEPTO','RETIROS','DEPÓSITOS','SALDO']
+            for i, h in enumerate(headers):
+                self.set_x(X_COLS_PT[i])
+                self.cell(COL_W_PT[i], ROW_H_PT, h, 0, 0, 'C', True)
+            self.rows_in_page = 0
+            self.set_y(Y_DATA_1_PT)
 
     def footer(self):
-        pass  # Sin footer
+        pass
 
     def add_row(self, fecha, concepto, retiros, depositos, saldo):
         if self.rows_in_page >= ROWS_PAGE:
             self.add_page()
+        y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
+
+        # Dibuja franja gris/blanco
         if self.row_global % 2 == 0:
             self.set_fill_color(255, 255, 255)
         else:
             self.set_fill_color(191, 191, 191)
+        self.rect(X_COLS_PT[0], y, X_BAND_R_PT - X_COLS_PT[0], ROW_H_PT, style='F')
+
+        # Escribe texto
         vals = [
             clean_cell(fecha),
             clean_cell(concepto),
@@ -130,26 +134,21 @@ class BanamexPDF(FPDF):
             monto_cell(saldo)
         ]
         aligns = ['C', 'L', 'R', 'R', 'R']
-        y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
         self.set_font('Helvetica', '', 9)
         for i, val in enumerate(vals):
             self.set_xy(X_COLS_PT[i], y)
-            self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
+            self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], False)
+
+        # Dibuja líneas encima de la celda
+        self.set_line_width(1.0)
+        self.set_draw_color(0)
+        for x in X_LINE_PT:
+            self.line(x, y, x, y + ROW_H_PT)
+
         self.rows_in_page += 1
         self.row_global += 1
 
-    def draw_vertical_lines(self):
-        self.set_line_width(LINE_WIDTH_PT)
-        self.set_draw_color(0)
-        for x in X_LINE_PT:
-            self.line(x, Y_LINE_START_PT, x, Y_LINE_START_PT + LINE_LENGTH_PT)
-
-    def _endpage(self):
-        # Sobrescribe el método para dibujar las líneas al final de cada página
-        super()._endpage()
-        self.draw_vertical_lines()
-
-# INTERFAZ DE STREAMLIT
+# INTERFAZ STREAMLIT
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
 st.title('🏦 Conversor Estado de Cuenta Banamex – Formato Final')
 
@@ -176,7 +175,7 @@ if excel_file:
         if st.button('🚀 Generar PDF Estado de Cuenta', type='primary', use_container_width=True):
             with st.spinner('Generando PDF con formato Banamex...'):
                 try:
-                    pdf = BanamexPDF(cliente, numcte, periodo)
+                    pdf = BanamexPDF(cliente, numcte, periodo, logo_path='assets/logo_banamex.png')
                     pdf.add_page()
                     for _, r in df.iterrows():
                         pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
