@@ -10,19 +10,17 @@ MM_TO_PT = 2.83465
 PAGE_W_PT = 187.33 * MM_TO_PT
 PAGE_H_PT = 279.40 * MM_TO_PT
 
-# Líneas verticales (en mm desde el borde izquierdo) - Valores corregidos
+# Líneas verticales (en mm desde el borde izquierdo)
 X_LINE_MM = [20.00, 91.13, 115.78, 142.45]
 X_LINE_PT = [x * MM_TO_PT for x in X_LINE_MM]
-Y_LINE_START_PT = 32.61 * MM_TO_PT
-LINE_LENGTH_PT = 228.88 * MM_TO_PT
 
 # Columnas (en puntos)
 X_COLS_PT = [
-    5.11 * MM_TO_PT,   # FECHA - ahora está alineada a 5.11 mm desde el borde izquierdo
-    X_LINE_PT[0],      # CONCEPTO - alineado con la primera línea vertical
-    X_LINE_PT[1],      # RETIROS - alineado con la segunda línea vertical
-    X_LINE_PT[2],      # DEPOSITOS - alineado con la tercera línea vertical
-    X_LINE_PT[3]       # SALDO - alineado con la cuarta línea vertical
+    5.11 * MM_TO_PT,   # FECHA - alineada a 5.11 mm
+    X_LINE_PT[0],      # CONCEPTO
+    X_LINE_PT[1],      # RETIROS
+    X_LINE_PT[2],      # DEPOSITOS
+    X_LINE_PT[3]       # SALDO
 ]
 
 # Ancho derecho para cálculo del ancho de la última columna
@@ -35,11 +33,16 @@ COL_W_PT = [
     X_BAND_R_PT - X_COLS_PT[4]    # Ancho de "SALDO"
 ]
 
-# Altura inicial de datos y altura de fila
-Y_DATA_1_PT = 104.73901  # Puedes ajustar este valor si la fecha no está centrada
-BOTTOM_MG_PT = 18.16 * MM_TO_PT
-ROWS_PAGE = 51
-ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
+# Posiciones verticales
+Y_HEADER_PT = 50.0 * MM_TO_PT     # Altura del encabezado en páginas siguientes
+Y_DATA_1_PT = 104.73901            # Altura inicial de los datos
+BOTTOM_MG_PT = 18.16 * MM_TO_PT   # Margen inferior
+
+# Altura de fila base
+ROW_H_PT = 12  # Ajuste fino para conceptos multilínea
+
+# Pie de página
+FOOTER_TEXT = "Centro de Atención Telefónica Ciudad de México: 55 1226 2639 Resto del país: 800 021 2345"
 
 def clean_cell(val):
     if val is None:
@@ -80,6 +83,24 @@ def parse_excel(df):
         })
     return pd.DataFrame(parsed)
 
+def split_text(pdf, text, max_width, font_size=9):
+    pdf.set_font('Helvetica', '', font_size)
+    words = text.split(' ')
+    lines = []
+    current_line = ''
+
+    for word in words:
+        test_line = current_line + ' ' + word.strip() if current_line else word.strip()
+        if pdf.get_string_width(test_line) <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word.strip()
+    if current_line:
+        lines.append(current_line)
+    return lines
+
 class BanamexPDF(FPDF):
     def __init__(self, cliente, num_cte, periodo):
         super().__init__(unit='pt', format=(PAGE_W_PT, PAGE_H_PT))
@@ -97,7 +118,6 @@ class BanamexPDF(FPDF):
             self.rows_in_page = 0
             self.set_y(Y_DATA_1_PT)
         else:
-            # Encabezado normal en páginas siguientes
             self.page_no_global += 1
             self.set_font('Helvetica', 'B', 9)
             self.set_y(Y_HEADER_PT)
@@ -105,15 +125,35 @@ class BanamexPDF(FPDF):
             for i, h in enumerate(headers):
                 self.set_x(X_COLS_PT[i])
                 self.cell(COL_W_PT[i], ROW_H_PT, h, 0, 0, 'C', True)
+            # Encabezado adicional
+            self.set_font('Helvetica', '', 8)
+            self.set_xy(0, Y_HEADER_PT - 12)
+            self.cell(PAGE_W_PT, 10, f'ESTADO DE CUENTA AL {self.periodo}', 0, 0, 'C')
+            self.set_xy(0, Y_HEADER_PT - 6)
+            self.cell(PAGE_W_PT, 10, f'CLIENTE: {self.num_cte}     Página: {self.page_no_global + 1} de ???     {self.cliente}', 0, 0, 'C')
             self.rows_in_page = 0
             self.set_y(Y_DATA_1_PT)
 
     def footer(self):
-        pass
+        self.set_y(-20)
+        self.set_font('Helvetica', '', 7)
+        self.cell(0, 10, FOOTER_TEXT, 0, 0, 'C')
 
     def add_row(self, fecha, concepto, retiros, depositos, saldo):
-        if self.rows_in_page >= ROWS_PAGE:
+        if self.rows_in_page >= 51:
             self.add_page()
+
+        # Convertir valores a cadenas limpias
+        fecha_str = clean_cell(fecha)
+        concepto_str = clean_cell(concepto)
+        retiros_str = monto_cell(retiros)
+        depositos_str = monto_cell(depositos)
+        saldo_str = monto_cell(saldo)
+
+        # Dividir concepto en líneas
+        concept_lines = split_text(self, concepto_str, COL_W_PT[1] - 2)
+        row_height = ROW_H_PT * len(concept_lines)
+
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
 
         # Dibuja franja gris/blanco
@@ -121,30 +161,42 @@ class BanamexPDF(FPDF):
             self.set_fill_color(255, 255, 255)
         else:
             self.set_fill_color(191, 191, 191)
-        self.rect(X_COLS_PT[0], y, X_BAND_R_PT - X_COLS_PT[0], ROW_H_PT, style='F')
-
-        # Escribe texto
-        vals = [
-            clean_cell(fecha),
-            clean_cell(concepto),
-            monto_cell(retiros),
-            monto_cell(depositos),
-            monto_cell(saldo)
-        ]
-        aligns = ['C', 'L', 'R', 'R', 'R']
-        self.set_font('Helvetica', '', 9)
-        for i, val in enumerate(vals):
-            self.set_xy(X_COLS_PT[i], y)
-            self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], False)
+        self.rect(X_COLS_PT[0], y, X_BAND_R_PT - X_COLS_PT[0], row_height, style='F')
 
         # Dibuja líneas encima de la celda
-        self.set_line_width(1.0)  # Grosor aumentado a 1 pt
+        self.set_line_width(1.0)
         self.set_draw_color(0)
         for x in X_LINE_PT:
-            self.line(x, y, x, y + ROW_H_PT)
+            self.line(x, y, x, y + row_height)
 
-        self.rows_in_page += 1
+        # Escribe los valores
+        self.set_font('Helvetica', '', 9)
+
+        # FECHA
+        self.set_xy(X_COLS_PT[0], y + 3)
+        self.cell(COL_W_PT[0], row_height, fecha_str, 0, 0, 'C', False)
+
+        # CONCEPTO (con múltiples líneas)
+        for i, line in enumerate(concept_lines):
+            self.set_xy(X_COLS_PT[1], y + i * ROW_H_PT + 3)
+            self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'L', False)
+
+        # RETIROS
+        self.set_xy(X_COLS_PT[2], y + 3)
+        self.cell(COL_W_PT[2], row_height, retiros_str, 0, 0, 'R', False)
+
+        # DEPÓSITOS
+        self.set_xy(X_COLS_PT[3], y + 3)
+        self.cell(COL_W_PT[3], row_height, depositos_str, 0, 0, 'R', False)
+
+        # SALDO
+        self.set_xy(X_COLS_PT[4], y + 3)
+        self.cell(COL_W_PT[4], row_height, saldo_str, 0, 0, 'R', False)
+
+        # Avanzar filas usadas
+        self.rows_in_page += len(concept_lines)
         self.row_global += 1
+
 
 # INTERFAZ STREAMLIT
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
