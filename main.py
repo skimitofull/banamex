@@ -30,12 +30,18 @@ def parse_excel(df):
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     parsed = []
     for _, r in df.iterrows():
+        fecha = str(r['FECHA']).strip() if pd.notna(r['FECHA']) else ''
+        concepto = str(r['CONCEPTO']).strip() if pd.notna(r['CONCEPTO']) else ''
+        retiros = float(r['RETIROS']) if pd.notna(r['RETIROS']) else None
+        depositos = float(r['DEPOSITOS']) if pd.notna(r['DEPOSITOS']) else None
+        saldo = float(r['SALDO']) if pd.notna(r['SALDO']) else None
+        
         parsed.append({
-            'FECHA':     '' if pd.isna(r['FECHA'])     else str(r['FECHA']).strip(),
-            'CONCEPTO':  '' if pd.isna(r['CONCEPTO'])  else str(r['CONCEPTO']).strip(),
-            'RETIROS':    None if pd.isna(r['RETIROS'])    else float(r['RETIROS']),
-            'DEPOSITOS':  None if pd.isna(r['DEPOSITOS'])  else float(r['DEPOSITOS']),
-            'SALDO':      None if pd.isna(r['SALDO'])      else float(r['SALDO']),
+            'FECHA': fecha if fecha != 'nan' else '',
+            'CONCEPTO': concepto if concepto != 'nan' else '',
+            'RETIROS': retiros,
+            'DEPOSITOS': depositos,
+            'SALDO': saldo,
         })
     return pd.DataFrame(parsed)
 
@@ -130,7 +136,7 @@ with st.sidebar:
     periodo = st.text_input('Período', '21 DE ENERO DE 2025')
     st.markdown('''
 * **Ancho x Alto página:** 187.33 mm × 279.4 mm  
-* **Fuente:** Helvetica (o Arial) 9 pt  
+* **Fuente:** Helvetica 9 pt  
 * **Filas:** 52 = 1 encabezado + 51 datos  
 * **Alternado global blanco / gris #bfbfbf**  
 * **Líneas negras en columnas (sin la última)**
@@ -147,6 +153,7 @@ if excel_file:
     if st.button('Generar PDF exacto'):
         pdf = BanamexPDF(cliente, numcte, periodo)
         pdf.add_page()
+        pdf.set_font('Helvetica','',9)  # Establecer la fuente aquí
         for _,r in df.iterrows():
             pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
 
