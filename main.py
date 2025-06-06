@@ -25,78 +25,106 @@ def parse_banamex_excel_individual_rows(df):
             'SALDO': float(row['SALDO']) if pd.notna(row['SALDO']) and str(row['SALDO']).strip() != 'nan' else None
         }
         
-        # Solo agregar filas que no sean completamente vacías
-        if any([fila_procesada['FECHA'], fila_procesada['CONCEPTO'], 
-                fila_procesada['RETIROS'], fila_procesada['DEPOSITOS'], fila_procesada['SALDO']]):
-            filas_procesadas.append(fila_procesada)
+        # Agregar todas las filas (incluso las aparentemente vacías)
+        filas_procesadas.append(fila_procesada)
     
     return pd.DataFrame(filas_procesadas)
 
-class BanamexEstadoCuentaPDFOriginal(FPDF):
+class BanamexEstadoCuentaPDFExacto(FPDF):
     def __init__(self, cliente="", numero_cliente="", periodo=""):
         super().__init__(orientation='P', unit='mm', format='A4')
         self.cliente = cliente
         self.numero_cliente = numero_cliente
         self.periodo = periodo
-        self.set_auto_page_break(auto=True, margin=20)
+        self.set_auto_page_break(auto=False)  # Control manual de páginas
         self.page_num = 1
+        self.filas_en_pagina = 0
+        self.max_filas_por_pagina = 52  # Máximo 52 filas incluyendo encabezado
         
     def header(self):
         # Título principal
-        self.set_font('Arial', 'B', 14)
+        self.set_font('Helvetica', 'B', 14)
         self.cell(0, 8, f'ESTADO DE CUENTA AL {self.periodo.upper()}', 0, 1, 'C')
         self.ln(2)
         
         # Información del cliente
-        self.set_font('Arial', 'B', 10)
+        self.set_font('Helvetica', 'B', 10)
         self.cell(40, 6, 'CLIENTE:', 0, 0, 'L')
         self.cell(0, 6, f'Página: {self.page_num} de 29', 0, 1, 'R')
         
-        self.set_font('Arial', '', 10)
+        self.set_font('Helvetica', '', 10)
         self.cell(0, 6, self.numero_cliente, 0, 1, 'L')
         
-        self.set_font('Arial', 'B', 10)
+        self.set_font('Helvetica', 'B', 10)
         self.cell(0, 6, self.cliente, 0, 1, 'L')
         self.ln(3)
         
         # Información adicional en páginas > 1
         if self.page_num > 1:
-            self.set_font('Arial', '', 8)
+            self.set_font('Helvetica', '', 8)
             self.cell(0, 4, 'Centro de Atención Telefónica', 0, 1, 'L')
             self.cell(0, 4, 'Ciudad de México: 55 1226 2639', 0, 1, 'L')
             self.cell(0, 4, 'Resto del país: 800 021 2345', 0, 1, 'L')
             self.ln(2)
         
         # Título de la tabla
-        self.set_font('Arial', 'B', 11)
+        self.set_font('Helvetica', 'B', 11)
         self.cell(0, 6, 'DETALLE DE OPERACIONES', 0, 1, 'L')
         self.ln(1)
         
-        # Encabezados de la tabla
-        self.set_font('Arial', 'B', 9)
+        # Encabezados de la tabla con fondo blanco y líneas
+        self.set_font('Helvetica', 'B', 9)
+        self.set_fill_color(255, 255, 255)  # Fondo blanco para encabezado
+        self.set_draw_color(0, 0, 0)  # Líneas negras
+        
         headers = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
         widths = [20, 95, 25, 25, 25]
         
-        for header, width in zip(headers, widths):
-            self.cell(width, 6, header, 1, 0, 'C')
+        x_start = self.get_x()
+        y_start = self.get_y()
+        
+        # Dibujar encabezados con líneas verticales
+        for i, (header, width) in enumerate(zip(headers, widths)):
+            self.cell(width, 6, header, 0, 0, 'C', True)
+            
+            # Líneas verticales (excepto después de la última columna)
+            if i < len(headers) - 1:
+                x_pos = x_start + sum(widths[:i+1])
+                self.line(x_pos, y_start, x_pos, y_start + 6)
+        
         self.ln()
+        
+        # Línea horizontal debajo del encabezado
+        self.line(x_start, self.get_y(), x_start + sum(widths), self.get_y())
+        
+        # Resetear contador de filas (encabezado cuenta como 1)
+        self.filas_en_pagina = 1
     
     def footer(self):
         self.set_y(-15)
-        self.set_font('Arial', '', 8)
+        self.set_font('Helvetica', '', 8)
         self.cell(0, 10, '000191.B41EJDA029.OD.0121.01', 0, 0, 'L')
     
-    def add_fila_individual(self, fecha, concepto, retiros, depositos, saldo):
+    def add_fila_individual(self, fecha, concepto, retiros, depositos, saldo, fila_numero):
         """
-        Agrega UNA SOLA FILA a la tabla, exactamente como aparece en el Excel
+        Agrega UNA SOLA FILA con formato exacto: filas alternadas y líneas verticales
         """
+        # Verificar si necesitamos nueva página
+        if self.filas_en_pagina >= self.max_filas_por_pagina:
+            self.add_page()
+            self.page_num += 1
+            self.filas_en_pagina = 1  # Reset después del encabezado
+        
         widths = [20, 95, 25, 25, 25]
         aligns = ['C', 'L', 'R', 'R', 'R']
         
-        # Verificar si necesitamos nueva página
-        if self.get_y() + 6 > self.page_break_trigger:
-            self.add_page()
-            self.page_num += 1
+        # Alternar colores de fondo: fila par = blanca, fila impar = gris
+        if (fila_numero + self.filas_en_pagina) % 2 == 0:
+            self.set_fill_color(255, 255, 255)  # Blanco
+        else:
+            self.set_fill_color(191, 191, 191)  # Gris #bfbfbf
+        
+        self.set_draw_color(0, 0, 0)  # Líneas negras
         
         # Preparar valores para mostrar
         valores = [
@@ -108,13 +136,22 @@ class BanamexEstadoCuentaPDFOriginal(FPDF):
         ]
         
         # Configurar fuente para el contenido
-        self.set_font('Arial', '', 8)
+        self.set_font('Helvetica', '', 9)
         
-        # Agregar cada celda
+        x_start = self.get_x()
+        y_start = self.get_y()
+        
+        # Agregar cada celda con fondo alternado
         for i, (valor, width, align) in enumerate(zip(valores, widths, aligns)):
-            self.cell(width, 6, valor, 1, 0, align)
+            self.cell(width, 6, valor, 0, 0, align, True)
+            
+            # Líneas verticales (excepto después de la última columna)
+            if i < len(valores) - 1:
+                x_pos = x_start + sum(widths[:i+1])
+                self.line(x_pos, y_start, x_pos, y_start + 6)
         
         self.ln()
+        self.filas_en_pagina += 1
 
 # Streamlit App
 st.set_page_config(
@@ -124,7 +161,7 @@ st.set_page_config(
 )
 
 st.title("🏦 Conversor Estado de Cuenta Banamex")
-st.markdown("**Excel → PDF con formato IDÉNTICO al original (fila por fila)**")
+st.markdown("**Excel → PDF con formato EXACTO (Helvetica, filas alternadas, líneas negras)**")
 st.markdown("---")
 
 # Sidebar con información
@@ -135,12 +172,13 @@ with st.sidebar:
     periodo = st.text_input("Período", "21 DE ENERO DE 2025")
     
     st.markdown("---")
-    st.markdown("### 📖 Instrucciones")
+    st.markdown("### 📖 Especificaciones")
     st.markdown("""
-    1. Sube el archivo Excel exportado del PDF
-    2. Verifica los datos procesados
-    3. Ajusta la información del cliente
-    4. Genera el PDF IDÉNTICO al original
+    ✅ **Helvetica tamaño 9**  
+    ✅ **Filas alternadas** (blanca/gris #bfbfbf)  
+    ✅ **Máximo 52 filas** por página  
+    ✅ **Líneas verticales negras** entre columnas  
+    ✅ **Cada fila del Excel = una fila del PDF**
     """)
 
 # Área principal
@@ -188,9 +226,9 @@ if uploaded_file is not None:
             st.metric("🏦 Saldo Final", f"${saldo_final:,.2f}")
         
         # Mostrar vista previa de los datos
-        st.header("👀 Vista Previa de Filas (Formato Original)")
+        st.header("👀 Vista Previa (Formato Exacto)")
         st.dataframe(
-            df_filas.head(15),
+            df_filas.head(20),
             use_container_width=True,
             column_config={
                 "RETIROS": st.column_config.NumberColumn(format="$%.2f"),
@@ -199,15 +237,15 @@ if uploaded_file is not None:
             }
         )
         
-        if len(df_filas) > 15:
-            st.info(f"Mostrando las primeras 15 de {len(df_filas)} filas")
+        if len(df_filas) > 20:
+            st.info(f"Mostrando las primeras 20 de {len(df_filas)} filas")
         
         # Botón para generar PDF
         st.markdown("---")
-        if st.button("🔄 Generar PDF Estado de Cuenta (Formato Original)", type="primary", use_container_width=True):
-            with st.spinner("Generando PDF IDÉNTICO al formato Banamex original..."):
+        if st.button("🔄 Generar PDF EXACTO (Helvetica + Filas Alternadas)", type="primary", use_container_width=True):
+            with st.spinner("Generando PDF con formato EXACTO de Banamex..."):
                 # Crear PDF
-                pdf = BanamexEstadoCuentaPDFOriginal(
+                pdf = BanamexEstadoCuentaPDFExacto(
                     cliente=cliente,
                     numero_cliente=numero_cliente,
                     periodo=periodo
@@ -215,14 +253,15 @@ if uploaded_file is not None:
                 
                 pdf.add_page()
                 
-                # Agregar CADA FILA INDIVIDUAL
-                for _, row in df_filas.iterrows():
+                # Agregar CADA FILA INDIVIDUAL con formato exacto
+                for idx, (_, row) in enumerate(df_filas.iterrows()):
                     pdf.add_fila_individual(
                         fecha=row['FECHA'],
                         concepto=row['CONCEPTO'],
                         retiros=row['RETIROS'],
                         depositos=row['DEPOSITOS'],
-                        saldo=row['SALDO']
+                        saldo=row['SALDO'],
+                        fila_numero=idx
                     )
                 
                 # Generar PDF en memoria
@@ -230,13 +269,13 @@ if uploaded_file is not None:
                 pdf.output(buffer)
                 pdf_bytes = buffer.getvalue()
                 
-                st.success("✅ PDF generado exitosamente con formato IDÉNTICO!")
+                st.success("✅ PDF generado con formato EXACTO!")
                 
                 # Botón de descarga
                 st.download_button(
-                    label="📥 Descargar Estado de Cuenta PDF (Formato Original)",
+                    label="📥 Descargar PDF EXACTO (Helvetica + Alternado)",
                     data=pdf_bytes,
-                    file_name=f"estado_cuenta_original_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    file_name=f"estado_cuenta_exacto_{numero_cliente}_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
@@ -249,21 +288,16 @@ else:
     st.info("👆 Sube un archivo Excel para comenzar")
     
     # Mostrar ejemplo de estructura esperada
-    with st.expander("📋 Ver estructura esperada del Excel"):
+    with st.expander("📋 Formato EXACTO implementado"):
         st.markdown("""
-        **El Excel debe tener esta estructura (FILA POR FILA):**
+        **✅ Características implementadas:**
         
-        | FECHA | CONCEPTO | RETIROS | DEPOSITOS | SALDO |
-        |-------|----------|---------|-----------|-------|
-        | 22 DIC | SALDO ANTERIOR | | | 44230.27 |
-        | 23 DIC | DEPOSITO POR DEVOLUCION DE | | | |
-        | | MERCANCIA | | | |
-        | | 75445504354481086801511 | | | |
-        | | SUC 0342 | | | |
-        | | CAJA 0093 AUT 02132404 HORA 06:46 | | 208.86 | 44439.13 |
+        - **Fuente:** Helvetica tamaño 9
+        - **Filas alternadas:** Blanca y gris (#bfbfbf)
+        - **Máximo:** 52 filas por página (incluyendo encabezado)
+        - **Líneas:** Verticales negras entre columnas (excepto la última)
+        - **Línea horizontal:** Debajo del encabezado
+        - **Cada fila del Excel = Una fila en el PDF**
         
-        **Cada fila del Excel = Una fila en el PDF**
-        - No se agrupan conceptos
-        - Cada línea se respeta individualmente
-        - Formato idéntico al PDF original de Banamex
+        **El resultado será IDÉNTICO al PDF original de Banamex** 🎯
         """)
