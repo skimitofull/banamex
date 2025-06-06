@@ -173,7 +173,7 @@ class BanamexPDF(FPDF):
         self.set_font('Helvetica', '', 9)
 
         # FECHA - centrado horizontal y vertical
-        self.set_xy(X_COLS_PT[0], y + (row_height / 3) - 5)
+        self.set_xy(X_COLS_PT[0], y + (row_height / 3) - 3)
         self.cell(COL_W_PT[0], ROW_H_PT, fecha_str, 0, 0, 'C', False)
 
         # CONCEPTO (con múltiples líneas) - alineado a la izquierda y centrado verticalmente
