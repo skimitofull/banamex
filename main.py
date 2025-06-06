@@ -22,53 +22,67 @@ BOTTOM_MG_PT = 18.16 * MM_TO_PT
 ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
-# ─── FUNCIÓN PARA LIMPIAR VALORES ─────────────────────────────────────────
-def clean_value(value):
-    """Limpia valores eliminando nan, None, y strings vacíos"""
-    if pd.isna(value) or value is None:
+# ─── FUNCIÓN ULTRA AGRESIVA PARA BANEAR "nan" ─────────────────────────────
+def banear_nan_completamente(value):
+    """BANEA COMPLETAMENTE cualquier rastro de 'nan' o valores vacíos"""
+    # Si es None o NaN, devolver cadena vacía
+    if value is None or pd.isna(value):
         return ''
-
-    str_val = str(value).strip()
-    if str_val.lower() in ['nan', 'none', '']:
+    
+    # Convertir a string y limpiar
+    str_value = str(value).strip()
+    
+    # Lista de valores prohibidos (en minúsculas para comparación)
+    valores_prohibidos = ['nan', 'none', 'null', 'na', '<na>', 'n/a']
+    
+    # Si el valor está en la lista prohibida, devolver vacío
+    if str_value.lower() in valores_prohibidos:
         return ''
+    
+    # Si el string está vacío después de strip, devolver vacío
+    if not str_value:
+        return ''
+    
+    return str_value
 
-    return str_val
-
-def clean_numeric_value(value):
-    """Limpia valores numéricos"""
-    if pd.isna(value) or value is None:
+def limpiar_numero(value):
+    """Limpia valores numéricos y devuelve None si no es válido"""
+    if value is None or pd.isna(value):
         return None
-
+    
     try:
+        # Intentar convertir a float
         num_val = float(value)
+        # Si es 0, devolver None (para que aparezca vacío)
         return num_val if num_val != 0 else None
     except (ValueError, TypeError):
         return None
 
-# ─── PARSER EXCEL ─────────────────────────────────────────────────────────
+# ─── PARSER EXCEL CON LIMPIEZA ULTRA AGRESIVA ────────────────────────────
 def parse_excel(df):
     df = df.copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
     parsed = []
 
     for _, r in df.iterrows():
-        fecha = clean_value(r['FECHA'])
-        concepto = clean_value(r['CONCEPTO'])
-        retiros = clean_numeric_value(r['RETIROS'])
-        depositos = clean_numeric_value(r['DEPOSITOS'])
-        saldo = clean_numeric_value(r['SALDO'])
+        # Aplicar limpieza ultra agresiva a cada campo
+        fecha_limpia = banear_nan_completamente(r['FECHA'])
+        concepto_limpio = banear_nan_completamente(r['CONCEPTO'])
+        retiros_limpio = limpiar_numero(r['RETIROS'])
+        depositos_limpio = limpiar_numero(r['DEPOSITOS'])
+        saldo_limpio = limpiar_numero(r['SALDO'])
 
         parsed.append({
-            'FECHA': fecha,
-            'CONCEPTO': concepto,
-            'RETIROS': retiros,
-            'DEPOSITOS': depositos,
-            'SALDO': saldo,
+            'FECHA': fecha_limpia,
+            'CONCEPTO': concepto_limpio,
+            'RETIROS': retiros_limpio,
+            'DEPOSITOS': depositos_limpio,
+            'SALDO': saldo_limpio,
         })
 
     return pd.DataFrame(parsed)
 
-# ─── CLASE PDF ────────────────────────────────────────────────────────────
+# ─── CLASE PDF CON FILTRO ANTI-NAN ───────────────────────────────────────
 class BanamexPDF(FPDF):
     def __init__(self, cliente, num_cte, periodo):
         super().__init__(unit='pt', format=(PAGE_W_PT, PAGE_H_PT))
@@ -121,6 +135,28 @@ class BanamexPDF(FPDF):
         self.set_x(X_BAND_L_PT)
         self.cell(0, 10, '000191.B41EJDA029.OD.0121.01', 0, 0, 'L')
 
+    def filtro_anti_nan(self, texto):
+        """FILTRO FINAL: Si detecta 'nan' en el texto, lo reemplaza por vacío"""
+        if not texto:
+            return ''
+        
+        texto_str = str(texto).strip()
+        
+        # Lista de palabras prohibidas
+        prohibidas = ['nan', 'none', 'null', 'na', '<na>', 'n/a']
+        
+        # Si el texto completo es una palabra prohibida, devolver vacío
+        if texto_str.lower() in prohibidas:
+            return ''
+        
+        # Reemplazar cualquier ocurrencia de palabras prohibidas
+        for prohibida in prohibidas:
+            texto_str = texto_str.replace(prohibida, '')
+            texto_str = texto_str.replace(prohibida.upper(), '')
+            texto_str = texto_str.replace(prohibida.capitalize(), '')
+        
+        return texto_str.strip()
+
     def add_row(self, fecha, concepto, retiros, depositos, saldo):
         if self.rows_in_page >= ROWS_PAGE:
             self.add_page()
@@ -131,13 +167,13 @@ class BanamexPDF(FPDF):
         else:
             self.set_fill_color(191, 191, 191)
 
-        # Preparar valores para mostrar (sin nan ni None)
+        # Preparar valores con FILTRO ANTI-NAN FINAL
         vals = [
-            fecha if fecha else '',
-            concepto if concepto else '',
-            f'{retiros:,.2f}' if retiros is not None else '',
-            f'{depositos:,.2f}' if depositos is not None else '',
-            f'{saldo:,.2f}' if saldo is not None else ''
+            self.filtro_anti_nan(fecha),
+            self.filtro_anti_nan(concepto),
+            self.filtro_anti_nan(f'{retiros:,.2f}' if retiros is not None else ''),
+            self.filtro_anti_nan(f'{depositos:,.2f}' if depositos is not None else ''),
+            self.filtro_anti_nan(f'{saldo:,.2f}' if saldo is not None else '')
         ]
 
         aligns = ['C', 'L', 'R', 'R', 'R']
@@ -146,7 +182,9 @@ class BanamexPDF(FPDF):
 
         for i, val in enumerate(vals):
             self.set_xy(X_COLS_PT[i], y)
-            self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
+            # APLICAR FILTRO ANTI-NAN UNA VEZ MÁS ANTES DE ESCRIBIR
+            texto_final = self.filtro_anti_nan(val)
+            self.cell(COL_W_PT[i], ROW_H_PT, texto_final, 0, 0, aligns[i], True)
             if i < 4:
                 self.line(X_COLS_PT[i+1], y, X_COLS_PT[i+1], y+ROW_H_PT)
 
@@ -155,7 +193,7 @@ class BanamexPDF(FPDF):
 
 # ─── STREAMLIT ────────────────────────────────────────────────────────────
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
-st.title('🏦 Conversor Estado de Cuenta Banamex – Formato Exacto')
+st.title('🏦 Conversor Estado de Cuenta Banamex – SIN NAN')
 
 with st.sidebar:
     st.header('Datos del cliente')
@@ -165,7 +203,7 @@ with st.sidebar:
     st.markdown('''
 * **Ancho x Alto página:** 187.33 mm × 279.4 mm
 * **Fuente:** Helvetica 9 pt
-* **Filas:** 52 = 1 encabezado + 51 datos
+* **FILTRO ANTI-NAN:** ✅ ACTIVO
 * **Alternado global blanco / gris #bfbfbf**
 * **Líneas negras en columnas (sin la última)**
 ''')
@@ -175,26 +213,26 @@ excel_file = st.file_uploader('Sube tu archivo Excel', type=['xlsx', 'xls'])
 if excel_file:
     df_raw = pd.read_excel(excel_file)
     df = parse_excel(df_raw)
-    st.success(f'Archivo leído. Filas: {len(df)}')
+    st.success(f'✅ Archivo leído. Filas: {len(df)} - FILTRO ANTI-NAN APLICADO')
     st.dataframe(df.head(15), use_container_width=True)
 
-    if st.button('Generar PDF exacto'):
-        with st.spinner('Generando PDF...'):
+    if st.button('🚀 Generar PDF SIN NAN'):
+        with st.spinner('Generando PDF con FILTRO ANTI-NAN...'):
             pdf = BanamexPDF(cliente, numcte, periodo)
             pdf.add_page()
 
-            # Procesar filas sin mostrar None
+            # Procesar filas con filtro anti-nan
             for _, r in df.iterrows():
                 pdf.add_row(r['FECHA'], r['CONCEPTO'], r['RETIROS'], r['DEPOSITOS'], r['SALDO'])
 
             buf = io.BytesIO()
             pdf.output(buf)
 
-            st.success('✅ PDF generado correctamente!')
+            st.success('✅ PDF generado SIN NAN!')
             st.download_button(
-                '📥 Descargar PDF',
+                '📥 Descargar PDF LIMPIO',
                 data=buf.getvalue(),
-                file_name=f'Banamex_{numcte}_{datetime.now():%Y%m%d}.pdf',
+                file_name=f'Banamex_LIMPIO_{numcte}_{datetime.now():%Y%m%d}.pdf',
                 mime='application/pdf'
             )
 else:
