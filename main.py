@@ -3,7 +3,6 @@ import pandas as pd
 from fpdf import FPDF
 import io
 from datetime import datetime
-import numpy as np
 
 MM_TO_PT = 2.83465
 PAGE_W_PT = 187.33 * MM_TO_PT
@@ -21,24 +20,19 @@ BOTTOM_MG_PT = 18.16 * MM_TO_PT
 ROWS_PAGE = 51
 ROW_H_PT = (PAGE_H_PT - BOTTOM_MG_PT - Y_DATA_1_PT) / (ROWS_PAGE - 1)
 
-def limpiar_nan(val):
-    """Devuelve '' si el valor es None, NaN, 'nan', 'None', 'null', o string vacío."""
-    if val is None:
-        return ''
-    if isinstance(val, float) and np.isnan(val):
-        return ''
+def filtro_universal(val):
     sval = str(val).strip()
     if sval.lower() in ['nan', 'none', 'null', '']:
         return ''
-    return sval
+    sval = sval.replace('nan', '').replace('NaN', '').replace('None', '').replace('null', '')
+    return sval.strip()
 
 def monto_str(val):
-    """Formatea el monto solo si es número válido, si no, regresa vacío."""
-    limpio = limpiar_nan(val)
-    if limpio == '':
+    sval = filtro_universal(val)
+    if sval == '':
         return ''
     try:
-        return f'{float(limpio):,.2f}'
+        return f'{float(sval):,.2f}'
     except:
         return ''
 
@@ -110,8 +104,8 @@ class BanamexPDF(FPDF):
             self.set_fill_color(191, 191, 191)
 
         vals = [
-            limpiar_nan(fecha),
-            limpiar_nan(concepto),
+            filtro_universal(fecha),
+            filtro_universal(concepto),
             monto_str(retiros),
             monto_str(depositos),
             monto_str(saldo)
@@ -121,8 +115,7 @@ class BanamexPDF(FPDF):
         self.set_font('Helvetica', '', 9)
         for i, val in enumerate(vals):
             # FILTRO FINAL: elimina cualquier 'nan' que se haya colado
-            if isinstance(val, str):
-                val = val.replace('nan', '').replace('NaN', '').replace('None', '').replace('null', '')
+            val = filtro_universal(val)
             self.set_xy(X_COLS_PT[i], y)
             self.cell(COL_W_PT[i], ROW_H_PT, val, 0, 0, aligns[i], True)
             if i < 4:
