@@ -151,7 +151,7 @@ class BanamexPDF(FPDF):
         saldo_str = monto_cell(saldo)
 
         # Dividir concepto en líneas
-        concept_lines = split_text(self, concepto_str, COL_W_PT[1] - 2)
+        concept_lines = split_text(self, concepto_str, COL_W_PT[1] - 6)
         row_height = ROW_H_PT * len(concept_lines)
 
         y = Y_DATA_1_PT + self.rows_in_page * ROW_H_PT
@@ -176,10 +176,10 @@ class BanamexPDF(FPDF):
         self.set_xy(X_COLS_PT[0], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[0], ROW_H_PT, fecha_str, 0, 0, 'C', False)
 
-        # CONCEPTO (con múltiples líneas) - centrado vertical y horizontal
+        # CONCEPTO (con múltiples líneas) - centrado verticalmente
         line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2)
         for i, line in enumerate(concept_lines):
-            self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT)
+            self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 3)
             self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'C', False)
 
         # RETIROS - centrado
