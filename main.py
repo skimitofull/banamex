@@ -31,6 +31,19 @@ def clean_cell(val):
         return ''
     return sval
 
+def monto_str(val):
+    if val is None:
+        return ''
+    if isinstance(val, float) and np.isnan(val):
+        return ''
+    sval = str(val).strip()
+    if sval.lower() in ['nan', 'none', 'null', '']:
+        return ''
+    try:
+        return f'{float(val):,.2f}'
+    except:
+        return ''
+
 def parse_excel(df):
     df = df.copy()
     df.columns = ['FECHA', 'CONCEPTO', 'RETIROS', 'DEPOSITOS', 'SALDO']
@@ -97,16 +110,6 @@ class BanamexPDF(FPDF):
             self.set_fill_color(255, 255, 255)
         else:
             self.set_fill_color(191, 191, 191)
-
-        def monto_str(val):
-            if val is None:
-                return ''
-            if isinstance(val, float) and np.isnan(val):
-                return ''
-            try:
-                return f'{float(val):,.2f}'
-            except:
-                return ''
 
         vals = [
             clean_cell(fecha),
