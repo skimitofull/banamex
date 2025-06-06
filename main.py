@@ -16,9 +16,15 @@ Y_LINE_START_PT = 31.77 * MM_TO_PT
 LINE_LENGTH_PT = 228.88 * MM_TO_PT
 LINE_WIDTH_PT = 0.75
 
-# Columnas (en mm desde el borde izquierdo)
-X_COLS_MM = [5.07, 20.11, 91.12, 115.68, 142.35]
-X_COLS_PT = [x * MM_TO_PT for x in X_COLS_MM]
+# Columnas (en puntos)
+X_COLS_PT = [
+    14.37,          # FECHA - 14.37 pt desde el borde izquierdo
+    X_LINE_PT[0],   # CONCEPTO - alineada con la primera línea
+    X_LINE_PT[1],   # RETIROS - alineada con la segunda línea
+    X_LINE_PT[2],   # DEPOSITOS - alineada con la tercera línea
+    X_LINE_PT[3]    # SALDO - alineada con la cuarta línea
+]
+
 X_BAND_R_PT = (187.33 - 18.42) * MM_TO_PT
 COL_W_PT = [
     X_COLS_PT[1] - X_COLS_PT[0],
@@ -91,6 +97,7 @@ class BanamexPDF(FPDF):
             self.rows_in_page = 0
             self.set_y(Y_DATA_1_PT)
             return
+
         # Header normal en las siguientes hojas
         self.page_no_global += 1
         self.set_font('Helvetica', 'B', 9)
@@ -136,8 +143,8 @@ class BanamexPDF(FPDF):
 
     def _endpage(self):
         # Sobrescribe el método para dibujar las líneas al final de cada página
-        self.draw_vertical_lines()
         super()._endpage()
+        self.draw_vertical_lines()
 
 # INTERFAZ DE STREAMLIT
 st.set_page_config(page_title='Banamex Excel → PDF', layout='wide', page_icon='🏦')
