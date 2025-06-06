@@ -35,8 +35,8 @@ COL_W_PT = [
 
 # Posiciones verticales
 Y_HEADER_PT = 50.0 * MM_TO_PT     # Altura del encabezado en páginas siguientes
-Y_DATA_1_PT = 106.73901            # Ajuste fino: alinea fecha con franjas grises
-BOTTOM_MG_PT = 18.16 * MM_TO_PT   # Margen inferior
+Y_DATA_1_PT = 106.73901           # Ajuste fino: alinea fecha con franjas grises
+BOTTOM_MG_PT = 18.16 * MM_TO_PT  # Margen inferior
 
 # Altura de fila base
 ROW_H_PT = 12  # Ajuste fino para mejorar espaciado visual
@@ -173,25 +173,25 @@ class BanamexPDF(FPDF):
         self.set_font('Helvetica', '', 9)
 
         # FECHA - centrado horizontal y vertical
-        self.set_xy(X_COLS_PT[0], y + (row_height / 3) - 3)
+        self.set_xy(X_COLS_PT[0], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[0], ROW_H_PT, fecha_str, 0, 0, 'L', False)
 
-        # CONCEPTO (con múltiples líneas) - alineado a la izquierda y subido un poco
-        line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2) - 3
+        # CONCEPTO (con múltiples líneas) - alineado a la izquierda y subido un poco más arriba
+        line_y_start = y + ((row_height - (len(concept_lines) * ROW_H_PT)) / 2) - 5
         for i, line in enumerate(concept_lines):
-        self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 2)
-        self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'L', False)
+            self.set_xy(X_COLS_PT[1], line_y_start + i * ROW_H_PT + 1)
+            self.cell(COL_W_PT[1], ROW_H_PT, line, 0, 0, 'L', False)
 
         # RETIROS - alineado a la derecha y centrado verticalmente
-        self.set_xy(X_COLS_PT[2], y + (row_height / 2) - 5)
+        self.set_xy(X_COLS_PT[2], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[2], ROW_H_PT, retiros_str, 0, 0, 'R', False)
 
         # DEPÓSITOS - alineado a la derecha y centrado verticalmente
-        self.set_xy(X_COLS_PT[3], y + (row_height / 2) - 5)
+        self.set_xy(X_COLS_PT[3], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[3], ROW_H_PT, depositos_str, 0, 0, 'R', False)
 
         # SALDO - alineado a la derecha y centrado verticalmente
-        self.set_xy(X_COLS_PT[4], y + (row_height / 2) - 5)
+        self.set_xy(X_COLS_PT[4], y + (row_height / 2) - 3)
         self.cell(COL_W_PT[4], ROW_H_PT, saldo_str, 0, 0, 'R', False)
 
         # Avanzar filas usadas
